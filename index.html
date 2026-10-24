@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Stock Amro</title>
+<meta name="theme-color" content="#4F46E5">
+<style>
+  :root { --accent:#4F46E5; --accent-dark:#3730A3; --bg:#F5F6FA; --card:#FFFFFF; --text:#1F2330; --muted:#6B7280; --line:#E5E7EB; --ok:#15803D; --warn:#B45309; --bad:#B91C1C; --radius:12px; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size:17px; }
+  button, input, select, textarea { font:inherit; }
+  button { cursor:pointer; }
+  .hidden { display:none !important; }
+  /* Connexion */
+  #login { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .login-card { background:var(--card); border-radius:16px; padding:32px 28px; width:100%; max-width:380px; box-shadow:0 10px 30px rgba(31,35,48,.08); }
+  .login-card h1 { margin:0 0 4px; font-size:26px; }
+  .login-card p { margin:0 0 20px; color:var(--muted); }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:14px; color:var(--muted); margin-bottom:6px; }
+  .field input, .field select, .field textarea { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:#fff; min-height:48px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 18px; border-radius:10px; border:1px solid transparent; background:var(--accent); color:#fff; font-weight:600; min-height:48px; }
+  .btn:active { background:var(--accent-dark); }
+  .btn.secondary { background:#fff; color:var(--text); border-color:var(--line); }
+  .btn.danger { background:#fff; color:var(--bad); border-color:#FCA5A5; }
+  .btn.small { min-height:40px; padding:8px 14px; font-size:15px; }
+  .btn.block { width:100%; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .error { color:var(--bad); font-size:15px; margin-top:8px; min-height:20px; }
+  /* Application */
+  header { position:sticky; top:0; z-index:10; background:var(--card); border-bottom:1px solid var(--line); }
+  .bar { max-width:960px; margin:0 auto; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .brand { font-weight:700; font-size:18px; }
+  .brand span { color:var(--accent); }
+  .who { color:var(--muted); font-size:14px; display:flex; align-items:center; gap:10px; }
+  nav { max-width:960px; margin:0 auto; padding:0 8px 8px; display:flex; gap:6px; overflow-x:auto; }
+  nav button { flex:1; min-width:96px; min-height:46px; border:1px solid var(--line); background:#fff; border-radius:10px; font-weight:600; color:var(--muted); }
+  nav button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  main { max-width:960px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:14px; }
+  .card h2 { margin:0 0 12px; font-size:18px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .grow { flex:1; min-width:160px; }
+  .seg { display:flex; gap:6px; }
+  .seg button { flex:1; min-height:50px; border:1px solid var(--line); background:#fff; border-radius:10px; font-weight:700; font-size:17px; color:var(--muted); }
+  .seg button.active-sortie { background:#4F46E5; color:#fff; border-color:#4F46E5; }
+  .seg button.active-retour { background:#15803D; color:#fff; border-color:#15803D; }
+  .seg button.active-ajustement { background:#B45309; color:#fff; border-color:#B45309; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 14px; min-height:40px; color:var(--muted); font-weight:600; font-size:15px; }
+  .chip.active { background:#EEF2FF; border-color:var(--accent); color:var(--accent-dark); }
+  .list { display:flex; flex-direction:column; gap:8px; }
+  .item { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; text-align:left; width:100%; }
+  .item:active { background:#F3F4F6; }
+  .thumb { width:84px; height:56px; flex:none; display:flex; align-items:center; justify-content:center; background:#FAFAFA; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .thumb img { max-width:100%; max-height:100%; image-rendering:auto; }
+  .thumb.empty { color:var(--muted); font-size:11px; }
+  .item .main { flex:1; min-width:0; }
+  .item .code { font-weight:700; }
+  .item .desc { color:var(--muted); font-size:15px; }
+  .item .qty { text-align:right; flex:none; }
+  .item .qty .n { font-size:22px; font-weight:700; }
+  .item .qty .u { color:var(--muted); font-size:13px; }
+  .colors { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .pill { background:#F3F4F6; border-radius:999px; padding:2px 10px; font-size:13px; color:var(--text); }
+  .prod-head { display:flex; gap:14px; align-items:center; }
+  .prod-head .thumb { width:150px; height:100px; }
+  .prod-head .code { font-size:22px; font-weight:700; }
+  .lines { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  .line { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; background:#FAFAFA; border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  .line .cname { font-weight:600; }
+  .line .cur { color:var(--muted); font-size:14px; text-align:right; min-width:90px; }
+  .line input { width:96px; min-height:48px; text-align:center; font-size:20px; font-weight:700; border:1px solid var(--line); border-radius:10px; padding:6px; }
+  .cart .ligne { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .cart .ligne:last-child { border-bottom:none; }
+  .muted { color:var(--muted); }
+  .small { font-size:14px; }
+  .total { font-weight:700; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td.num { text-align:right; white-space:nowrap; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
+  .tag.sortie { background:#EEF2FF; color:#3730A3; }
+  .tag.retour { background:#DCFCE7; color:#166534; }
+  .tag.ajustement { background:#FEF3C7; color:#92400E; }
+  .tag.ouverture { background:#F3F4F6; color:#374151; }
+  .tag.entree { background:#DBEAFE; color:#1E40AF; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1F2330; color:#fff; padding:12px 18px; border-radius:10px; font-weight:600; opacity:0; transition:opacity .2s; pointer-events:none; z-index:50; max-width:90vw; text-align:center; }
+  #toast.show { opacity:1; }
+  .stickybar { position:sticky; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:12px 16px; margin:0 -16px -16px; border-radius:0 0 var(--radius) var(--radius); }
+  @media (max-width:520px) { .prod-head .thumb { width:110px; height:76px; } .line input { width:84px; } }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <form class="login-card" id="loginForm">
+    <h1>Stock <span style="color:#4F46E5">Amro</span></h1>
+    <p>Suivi de l'inventaire du magasin</p>
+    <div class="field"><label for="email">Courriel</label><input id="email" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="password">Mot de passe</label><input id="password" type="password" autocomplete="current-password" required></div>
+    <button class="btn block" type="submit" id="loginBtn">Se connecter</button>
+    <div class="error" id="loginError"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="bar">
+      <div class="brand">Stock <span>Amro</span></div>
+      <div class="who"><span id="whoName"></span><button class="btn secondary small" id="logoutBtn">Quitter</button></div>
+    </div>
+    <nav id="nav">
+      <button data-view="stock" class="active">Stock</button>
+      <button data-view="mvt">Sortie / Retour</button>
+      <button data-view="ajust">Ajustement</button>
+      <button data-view="projets">Projets</button>
+      <button data-view="histo">Historique</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- STOCK -->
+    <section id="view-stock">
+      <div class="card">
+        <div class="row">
+          <input id="stockSearch" class="grow" placeholder="Chercher un code ou une description" style="padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+        </div>
+        <div class="chips" id="famChips" style="margin-top:10px"></div>
+        <div class="row small muted" id="stockSummary" style="margin-top:10px"></div>
+      </div>
+      <div class="list" id="stockList"></div>
+    </section>
+
+    <!-- SORTIE / RETOUR / AJUSTEMENT -->
+    <section id="view-mvt" class="hidden">
+      <div class="card">
+        <div class="seg" id="modeSeg">
+          <button data-mode="sortie">Sortie</button>
+          <button data-mode="retour">Retour</button>
+          <button data-mode="ajustement">Ajustement</button>
+        </div>
+        <div id="modeProjet" style="margin-top:12px">
+          <div class="field" style="margin:0"><label>Projet</label>
+            <select id="projetSelect"></select>
+          </div>
+        </div>
+        <div class="field" style="margin:12px 0 0"><label>Note (facultatif)</label><input id="mvtNote" placeholder="ex. : chantier bloc B, livré par Mohamed"></div>
+      </div>
+
+      <div class="card">
+        <input id="mvtSearch" placeholder="Chercher un profilé (code ou description)" style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+        <div class="list" id="mvtResults" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card hidden" id="prodCard">
+        <div class="prod-head">
+          <div class="thumb" id="prodThumb"></div>
+          <div><div class="code" id="prodCode"></div><div class="muted" id="prodDesc"></div><div class="small muted" id="prodMeta"></div></div>
+        </div>
+        <div class="lines" id="prodLines"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn secondary small" id="moreColors">+ autre couleur</button>
+          <div class="row hidden" id="newColorRow"><input id="newColorName" placeholder="Nouvelle couleur" style="padding:10px;border:1px solid var(--line);border-radius:10px;min-height:44px"><button class="btn small" id="newColorBtn">Ajouter</button></div>
+        </div>
+        <div class="stickybar"><button class="btn block" id="addToCart">Ajouter à la liste</button></div>
+      </div>
+
+      <div class="card cart hidden" id="cartCard">
+        <h2 id="cartTitle">À enregistrer</h2>
+        <div id="cartLines"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn secondary small" id="cartClear">Vider</button>
+          <button class="btn grow" id="cartValidate">Valider</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJETS -->
+    <section id="view-projets" class="hidden">
+      <div class="card">
+        <h2>Nouveau projet</h2>
+        <div class="row">
+          <input id="newProjetNom" class="grow" placeholder="Nom du projet (ex. : École Saint-Thomas)" style="padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+          <input id="newProjetClient" class="grow" placeholder="Client (facultatif)" style="padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+          <button class="btn" id="newProjetBtn">Créer</button>
+        </div>
+      </div>
+      <div class="card"><h2>Projets actifs</h2><div id="projetsActifs" class="list"></div></div>
+      <div class="card"><h2>Projets fermés</h2><div id="projetsFermes" class="list small muted"></div></div>
+    </section>
+
+    <!-- HISTORIQUE -->
+    <section id="view-histo" class="hidden">
+      <div class="card">
+        <div class="row">
+          <select id="histoType" style="padding:10px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+            <option value="">Tous les types</option><option value="sortie">Sorties</option><option value="retour">Retours</option><option value="ajustement">Ajustements</option><option value="entree">Entrées</option><option value="ouverture">Ouverture</option>
+          </select>
+          <input id="histoSearch" class="grow" placeholder="Code, projet, note…" style="padding:10px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+          <button class="btn secondary small" id="histoRefresh">Actualiser</button>
+        </div>
+        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Type</th><th>Profilé</th><th>Couleur</th><th class="num">Qté</th><th>Projet</th><th>Qui</th><th>Note</th><th></th></tr></thead><tbody id="histoBody"></tbody></table></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  var SUPABASE_URL = 'https://obrpiivhteybkyetfolf.supabase.co';
+  var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9icnBpaXZodGV5Ymt5ZXRmb2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2OTQ1NTUsImV4cCI6MjEwODI3MDU1NX0.yPjDdm7-R8n-5fx4-ly-AuuJ-QSu-_t5xVM_--Kjj-4';
+  var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var state = { session:null, role:'magasin', nom:'', produits:[], familles:[], couleurs:[], projets:[], stock:{}, fam:'', mode:'sortie', prod:null, showAll:false, cart:[], view:'stock' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function toast(msg, ms) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('show'); }, ms || 2200); }
+  function fmt(n) { n = Number(n || 0); return (Math.round(n * 1000) / 1000).toLocaleString('fr-CA'); }
+  function norm(s) { return String(s || '').toLowerCase().replace(/[\s\-_]/g, ''); }
+  function thumbHtml(p, cls) { return p.dessin_b64 ? '<div class="thumb ' + (cls || '') + '"><img alt="" src="data:image/png;base64,' + p.dessin_b64 + '"></div>' : '<div class="thumb empty ' + (cls || '') + '">sans dessin</div>'; }
+  function unitLabel(p, n) { if (p.unite === 'longueur') return (n === 1 ? 'longueur' : 'longueurs'); return p.unite; }
+  function colorName(id) { var c = state.couleurs.filter(function (x) { return x.id === id; })[0]; return c ? c.nom : '—'; }
+  function prodQty(pid) { var m = state.stock[pid] || {}; var t = 0; Object.keys(m).forEach(function (k) { t += Number(m[k]); }); return t; }
+
+  // ---------- Connexion ----------
+  $('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault(); $('loginError').textContent = ''; $('loginBtn').disabled = true;
+    var r = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+    $('loginBtn').disabled = false;
+    if (r.error) { $('loginError').textContent = 'Courriel ou mot de passe incorrect.'; return; }
+    start(r.data.session);
+  });
+  $('logoutBtn').addEventListener('click', async function () { await sb.auth.signOut(); location.reload(); });
+
+  async function boot() {
+    var r = await sb.auth.getSession();
+    if (r.data.session) start(r.data.session);
+  }
+  async function start(session) {
+    state.session = session;
+    state.role = (session.user.app_metadata && session.user.app_metadata.role) || 'magasin';
+    state.nom = (session.user.user_metadata && session.user.user_metadata.nom) || session.user.email;
+    $('whoName').textContent = state.nom;
+    $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+    await loadAll();
+    renderStock();
+  }
+
+  // ---------- Chargement ----------
+  async function loadAll() {
+    var r1 = await sb.from('familles').select('*').order('ordre');
+    var r2 = await sb.from('couleurs').select('*').order('ordre').order('nom');
+    var r3 = await sb.from('produits').select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note').eq('actif', true).order('code');
+    var r4 = await sb.from('projets').select('*').order('nom');
+    if (r1.error || r2.error || r3.error || r4.error) { toast('Erreur de chargement : ' + ((r1.error || r2.error || r3.error || r4.error).message), 5000); return; }
+    state.familles = r1.data; state.couleurs = r2.data; state.produits = r3.data; state.projets = r4.data;
+    await loadStock();
+    fillProjetSelect();
+  }
+  async function loadStock() {
+    var r = await sb.from('stock_courant').select('produit_id,couleur_id,quantite');
+    if (r.error) { toast('Erreur stock : ' + r.error.message, 5000); return; }
+    var m = {};
+    r.data.forEach(function (x) { m[x.produit_id] = m[x.produit_id] || {}; m[x.produit_id][x.couleur_id] = Number(x.quantite); });
+    state.stock = m;
+  }
+  function fillProjetSelect() {
+    var s = $('projetSelect'); s.innerHTML = '<option value="">— Choisir le projet —</option>';
+    state.projets.filter(function (p) { return p.statut === 'actif'; }).forEach(function (p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.nom + (p.client ? ' (' + p.client + ')' : ''); s.appendChild(o); });
+  }
+
+  // ---------- Navigation ----------
+  $('nav').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    showView(b.dataset.view);
+  });
+  function showView(v) {
+    state.view = v;
+    Array.prototype.forEach.call($('nav').querySelectorAll('button'), function (b) { b.classList.toggle('active', b.dataset.view === v); });
+    ['stock', 'mvt', 'projets', 'histo'].forEach(function (k) { $('view-' + k).classList.toggle('hidden', !(k === v || (v === 'ajust' && k === 'mvt'))); });
+    if (v === 'stock') renderStock();
+    if (v === 'mvt') { if (state.mode === 'ajustement') setMode('sortie'); else setMode(state.mode); }
+    if (v === 'ajust') setMode('ajustement');
+    if (v === 'projets') renderProjets();
+    if (v === 'histo') loadHisto();
+    window.scrollTo(0, 0);
+  }
+
+  // ---------- Stock ----------
+  function famChips() {
+    var c = $('famChips'); c.innerHTML = '';
+    var all = document.createElement('button'); all.className = 'chip' + (state.fam === '' ? ' active' : ''); all.textContent = 'Toutes'; all.onclick = function () { state.fam = ''; renderStock(); }; c.appendChild(all);
+    state.familles.forEach(function (f) {
+      var has = state.produits.some(function (p) { return p.famille_id === f.id; }); if (!has) return;
+      var b = document.createElement('button'); b.className = 'chip' + (state.fam === f.id ? ' active' : ''); b.textContent = f.nom; b.onclick = function () { state.fam = f.id; renderStock(); }; c.appendChild(b);
+    });
+  }
+  function filterProduits(q, fam) {
+    var nq = norm(q);
+    return state.produits.filter(function (p) {
+      if (fam && p.famille_id !== fam) return false;
+      if (!nq) return true;
+      return norm(p.code).indexOf(nq) >= 0 || norm(p.code_lu).indexOf(nq) >= 0 || norm(p.description).indexOf(nq) >= 0;
+    });
+  }
+  function renderStock() {
+    famChips();
+    var q = $('stockSearch').value;
+    var list = filterProduits(q, state.fam);
+    var totalQ = 0, totalKg = 0;
+    var html = list.map(function (p) {
+      var m = state.stock[p.id] || {}; var t = prodQty(p.id); totalQ += t;
+      var kg = (p.kg_m && p.longueur_m) ? t * p.kg_m * p.longueur_m : 0; totalKg += kg;
+      var cols = Object.keys(m).filter(function (k) { return Number(m[k]) !== 0; }).map(function (k) { return '<span class="pill">' + esc(colorName(Number(k))) + ' ' + fmt(m[k]) + '</span>'; }).join('');
+      return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) +
+        '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div><div class="colors">' + cols + '</div></div>' +
+        '<div class="qty"><div class="n">' + fmt(t) + '</div><div class="u">' + unitLabel(p, t) + (kg ? ' · ' + fmt(Math.round(kg)) + ' kg' : '') + '</div></div></button>';
+    }).join('');
+    $('stockList').innerHTML = html || '<div class="muted">Aucun produit.</div>';
+    $('stockSummary').textContent = list.length + ' produits · ' + fmt(totalQ) + ' longueurs · ' + fmt(Math.round(totalKg)) + ' kg (poids théorique)';
+  }
+  $('stockSearch').addEventListener('input', renderStock);
+  $('stockList').addEventListener('click', function (e) {
+    var b = e.target.closest('.item'); if (!b) return;
+    showView('mvt'); selectProduit(b.dataset.id);
+  });
+
+  // ---------- Mouvements ----------
+  $('modeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; setMode(b.dataset.mode); });
+  function setMode(mode) {
+    if (state.mode !== mode && state.cart.length) { if (!confirm('Changer de mode vide la liste en cours. Continuer ?')) return; state.cart = []; renderCart(); }
+    state.mode = mode;
+    Array.prototype.forEach.call($('modeSeg').querySelectorAll('button'), function (b) { b.className = (b.dataset.mode === mode) ? 'active-' + mode : ''; });
+    $('modeProjet').classList.toggle('hidden', mode === 'ajustement');
+    $('addToCart').textContent = mode === 'ajustement' ? 'Ajouter à la liste (quantités comptées)' : 'Ajouter à la liste';
+    $('cartTitle').textContent = mode === 'sortie' ? 'Sortie à enregistrer' : mode === 'retour' ? 'Retour à enregistrer' : 'Ajustement à enregistrer';
+    $('cartValidate').textContent = mode === 'sortie' ? 'Valider la sortie' : mode === 'retour' ? 'Valider le retour' : 'Valider l’ajustement';
+    if (state.prod) renderProd();
+  }
+  $('mvtSearch').addEventListener('input', function () {
+    var q = $('mvtSearch').value; var box = $('mvtResults');
+    if (!q.trim()) { box.innerHTML = ''; return; }
+    var list = filterProduits(q, '').slice(0, 12);
+    box.innerHTML = list.map(function (p) { return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) + '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div></div><div class="qty"><div class="n">' + fmt(prodQty(p.id)) + '</div><div class="u">' + unitLabel(p, prodQty(p.id)) + '</div></div></button>'; }).join('') || '<div class="muted">Aucun résultat.</div>';
+  });
+  $('mvtResults').addEventListener('click', function (e) { var b = e.target.closest('.item'); if (!b) return; selectProduit(b.dataset.id); });
+  function selectProduit(id) {
+    state.prod = state.produits.filter(function (p) { return p.id === id; })[0]; state.showAll = false;
+    $('mvtSearch').value = ''; $('mvtResults').innerHTML = '';
+    renderProd();
+    $('prodCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function renderProd() {
+    var p = state.prod; if (!p) { $('prodCard').classList.add('hidden'); return; }
+    $('prodCard').classList.remove('hidden');
+    $('prodThumb').outerHTML = thumbHtml(p).replace('class="thumb', 'id="prodThumb" class="thumb');
+    $('prodCode').textContent = p.code; $('prodDesc').textContent = p.description;
+    $('prodMeta').textContent = (p.kg_m ? p.kg_m + ' kg/m · ' : '') + (p.longueur_m ? 'longueur ' + p.longueur_m + ' m' : '') + (p.note ? ' · ' + p.note : '');
+    var m = state.stock[p.id] || {};
+    var cols = state.couleurs.filter(function (c) { return c.actif; });
+    var visible = cols.filter(function (c) { return state.showAll || state.mode === 'ajustement' || Number(m[c.id] || 0) !== 0; });
+    if (!visible.length) visible = cols.slice(0, 1);
+    var label = state.mode === 'sortie' ? 'sortie' : state.mode === 'retour' ? 'retour' : 'compté';
+    $('prodLines').innerHTML = visible.map(function (c) {
+      var cur = Number(m[c.id] || 0);
+      return '<div class="line"><div class="cname">' + esc(c.nom) + '</div><div class="cur">stock ' + fmt(cur) + '</div><input type="number" inputmode="decimal" min="0" step="1" data-col="' + c.id + '" placeholder="' + label + '"></div>';
+    }).join('');
+    $('moreColors').classList.toggle('hidden', state.showAll || visible.length === cols.length);
+  }
+  $('moreColors').addEventListener('click', function () { state.showAll = true; renderProd(); $('newColorRow').classList.remove('hidden'); });
+  $('newColorBtn').addEventListener('click', async function () {
+    var nom = $('newColorName').value.trim(); if (!nom) return;
+    var r = await sb.from('couleurs').insert({ nom: nom, ordre: 50 }).select().single();
+    if (r.error) { toast('Impossible d’ajouter la couleur : ' + r.error.message, 4000); return; }
+    state.couleurs.push(r.data); $('newColorName').value = ''; state.showAll = true; renderProd(); toast('Couleur ajoutée');
+  });
+  $('addToCart').addEventListener('click', function () {
+    var p = state.prod; if (!p) return;
+    var m = state.stock[p.id] || {}; var added = 0; var errors = [];
+    Array.prototype.forEach.call($('prodLines').querySelectorAll('input'), function (inp) {
+      if (inp.value === '') return;
+      var v = Number(inp.value); if (isNaN(v) || v < 0) { errors.push('Quantité invalide'); return; }
+      var col = Number(inp.dataset.col); var cur = Number(m[col] || 0);
+      if (state.mode === 'sortie' && v > cur) { errors.push(p.code + ' ' + colorName(col) + ' : seulement ' + fmt(cur) + ' en stock'); return; }
+      if (state.mode !== 'ajustement' && v === 0) return;
+      state.cart = state.cart.filter(function (l) { return !(l.produit_id === p.id && l.couleur_id === col); });
+      state.cart.push({ produit_id: p.id, code: p.code, couleur_id: col, couleur: colorName(col), qty: v, cur: cur });
+      added++;
+    });
+    if (errors.length) { toast(errors[0], 4000); return; }
+    if (!added) { toast('Entre au moins une quantité'); return; }
+    state.prod = null; renderProd(); renderCart(); toast(added + ' ligne' + (added > 1 ? 's' : '') + ' ajoutée' + (added > 1 ? 's' : ''));
+    $('mvtSearch').focus();
+  });
+  function renderCart() {
+    var c = $('cartCard'); if (!state.cart.length) { c.classList.add('hidden'); return; }
+    c.classList.remove('hidden');
+    $('cartLines').innerHTML = state.cart.map(function (l, i) {
+      var txt = state.mode === 'ajustement' ? ('compté ' + fmt(l.qty) + ' <span class="muted small">(stock ' + fmt(l.cur) + ', écart ' + (l.qty - l.cur >= 0 ? '+' : '') + fmt(l.qty - l.cur) + ')</span>') : (fmt(l.qty));
+      return '<div class="ligne"><div><strong>' + esc(l.code) + '</strong> <span class="muted">' + esc(l.couleur) + '</span></div><div class="total">' + txt + '</div><button class="btn secondary small" data-i="' + i + '">✕</button></div>';
+    }).join('');
+  }
+  $('cartLines').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; state.cart.splice(Number(b.dataset.i), 1); renderCart(); });
+  $('cartClear').addEventListener('click', function () { state.cart = []; renderCart(); });
+  $('cartValidate').addEventListener('click', async function () {
+    if (!state.cart.length) return;
+    var projet = $('projetSelect').value; var note = $('mvtNote').value.trim();
+    if (state.mode !== 'ajustement' && !projet) { toast('Choisis le projet avant de valider', 3000); $('projetSelect').focus(); return; }
+    var rows = state.cart.map(function (l) {
+      var q = state.mode === 'sortie' ? -l.qty : state.mode === 'retour' ? l.qty : (l.qty - l.cur);
+      return { type: state.mode, produit_id: l.produit_id, couleur_id: l.couleur_id, quantite: q, projet_id: state.mode === 'ajustement' ? null : projet, quantite_comptee: state.mode === 'ajustement' ? l.qty : null, note: note || null, utilisateur: state.nom };
+    }).filter(function (r) { return state.mode !== 'ajustement' || r.quantite !== 0; });
+    if (!rows.length) { toast('Rien à enregistrer : les quantités comptées sont égales au stock'); state.cart = []; renderCart(); return; }
+    $('cartValidate').disabled = true;
+    var r = await sb.from('mouvements').insert(rows);
+    $('cartValidate').disabled = false;
+    if (r.error) { toast('Erreur : ' + r.error.message, 5000); return; }
+    state.cart = []; renderCart(); $('mvtNote').value = '';
+    await loadStock();
+    toast(rows.length + ' mouvement' + (rows.length > 1 ? 's' : '') + ' enregistré' + (rows.length > 1 ? 's' : '') + ' ✓', 3000);
+  });
+
+  // ---------- Projets ----------
+  $('newProjetBtn').addEventListener('click', async function () {
+    var nom = $('newProjetNom').value.trim(); if (!nom) { toast('Donne un nom au projet'); return; }
+    var r = await sb.from('projets').insert({ nom: nom, client: $('newProjetClient').value.trim() || null, date_debut: new Date().toISOString().slice(0, 10) }).select().single();
+    if (r.error) { toast('Impossible : ' + (r.error.code === '23505' ? 'ce projet existe déjà' : r.error.message), 4000); return; }
+    state.projets.push(r.data); $('newProjetNom').value = ''; $('newProjetClient').value = ''; fillProjetSelect(); renderProjets(); toast('Projet créé');
+  });
+  function renderProjets() {
+    var act = state.projets.filter(function (p) { return p.statut === 'actif'; }); var fer = state.projets.filter(function (p) { return p.statut === 'ferme'; });
+    $('projetsActifs').innerHTML = act.map(function (p) { return '<div class="item"><div class="main"><div class="code">' + esc(p.nom) + '</div><div class="desc">' + esc(p.client || '') + (p.date_debut ? ' · depuis le ' + p.date_debut : '') + '</div></div><button class="btn secondary small" data-id="' + p.id + '" data-act="fermer">Fermer</button></div>'; }).join('') || '<div class="muted">Aucun projet actif. Crée-en un ci-dessus.</div>';
+    $('projetsFermes').innerHTML = fer.map(function (p) { return '<div class="item"><div class="main"><div class="code">' + esc(p.nom) + '</div><div class="desc">' + esc(p.client || '') + (p.date_fin ? ' · fermé le ' + p.date_fin : '') + '</div></div><button class="btn secondary small" data-id="' + p.id + '" data-act="rouvrir">Rouvrir</button></div>'; }).join('') || '<div class="muted">Aucun.</div>';
+  }
+  $('view-projets').addEventListener('click', async function (e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var ferme = b.dataset.act === 'fermer';
+    var r = await sb.from('projets').update({ statut: ferme ? 'ferme' : 'actif', date_fin: ferme ? new Date().toISOString().slice(0, 10) : null }).eq('id', b.dataset.id).select().single();
+    if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
+    state.projets = state.projets.map(function (p) { return p.id === r.data.id ? r.data : p; }); fillProjetSelect(); renderProjets();
+  });
+
+  // ---------- Historique ----------
+  async function loadHisto() {
+    var q = sb.from('mouvements').select('id,date_mvt,type,quantite,quantite_comptee,note,utilisateur,produits(code),couleurs(nom),projets(nom)').order('date_mvt', { ascending: false }).limit(200);
+    var t = $('histoType').value; if (t) q = q.eq('type', t);
+    var r = await q; if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
+    var s = norm($('histoSearch').value);
+    var rows = r.data.filter(function (m) { if (!s) return true; return norm((m.produits || {}).code).indexOf(s) >= 0 || norm((m.projets || {}).nom).indexOf(s) >= 0 || norm(m.note).indexOf(s) >= 0; });
+    $('histoBody').innerHTML = rows.map(function (m) {
+      var d = new Date(m.date_mvt); var ds = d.toLocaleDateString('fr-CA') + ' ' + d.toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' });
+      var del = state.role === 'admin' ? '<button class="btn danger small" data-del="' + m.id + '">✕</button>' : '';
+      var q = Number(m.quantite); var qs = (q > 0 ? '+' : '') + fmt(q) + (m.type === 'ajustement' ? ' <span class="muted">(compté ' + fmt(m.quantite_comptee) + ')</span>' : '');
+      return '<tr><td>' + ds + '</td><td><span class="tag ' + esc(m.type) + '">' + esc(m.type) + '</span></td><td>' + esc((m.produits || {}).code) + '</td><td>' + esc((m.couleurs || {}).nom) + '</td><td class="num">' + qs + '</td><td>' + esc((m.projets || {}).nom || '') + '</td><td>' + esc(m.utilisateur || '') + '</td><td>' + esc(m.note || '') + '</td><td>' + del + '</td></tr>';
+    }).join('') || '<tr><td colspan="9" class="muted">Aucun mouvement.</td></tr>';
+  }
+  $('histoRefresh').addEventListener('click', loadHisto);
+  $('histoType').addEventListener('change', loadHisto);
+  $('histoSearch').addEventListener('input', loadHisto);
+  $('histoBody').addEventListener('click', async function (e) {
+    var b = e.target.closest('button[data-del]'); if (!b) return;
+    if (!confirm('Supprimer ce mouvement ? Le stock sera recalculé.')) return;
+    var r = await sb.from('mouvements').delete().eq('id', b.dataset.del);
+    if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
+    await loadStock(); loadHisto(); toast('Mouvement supprimé');
+  });
+
+  boot();
+})();
+</script>
+</body>
+</html>
