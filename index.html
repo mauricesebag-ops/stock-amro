@@ -344,7 +344,7 @@
     diag('');
     var r1 = await sb.from('familles').select('*').order('ordre');
     var r2 = await sb.from('couleurs').select('*').order('ordre').order('nom');
-    var r3 = await sb.from('produits').select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note').eq('actif', true).order('code');
+    var r3 = await sb.from('produits').select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note,suivi_couleur,cout_unitaire').eq('actif', true).order('code');
     var r4 = await sb.from('projets').select('*').order('nom');
     var err = r1.error || r2.error || r3.error || r4.error;
     if (err || !r3.data || !r3.data.length) {
@@ -415,9 +415,9 @@
     famChips();
     var q = $('stockSearch').value;
     var list = filterProduits(q, state.fam);
-    var totalQ = 0, totalKg = 0;
+    var totalQ = 0, totalAutres = 0, totalKg = 0;
     var html = list.map(function (p) {
-      var m = state.stock[p.id] || {}; var t = prodQty(p.id); totalQ += t;
+      var m = state.stock[p.id] || {}; var t = prodQty(p.id); if (p.unite === 'longueur') totalQ += t; else totalAutres += t;
       var kg = (p.kg_m && p.longueur_m) ? t * p.kg_m * p.longueur_m : 0; totalKg += kg;
       var cols = Object.keys(m).filter(function (k) { return Number(m[k]) !== 0; }).map(function (k) { return '<span class="pill">' + esc(colorName(Number(k))) + ' ' + fmt(m[k]) + '</span>'; }).join('');
       return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) +
@@ -425,7 +425,7 @@
         '<div class="qty"><div class="n">' + fmt(t) + '</div><div class="u">' + unitLabel(p, t) + (kg ? ' · ' + fmt(Math.round(kg)) + ' kg' : '') + '</div></div></button>';
     }).join('');
     $('stockList').innerHTML = html || '<div class="muted">Aucun produit.</div>';
-    $('stockSummary').textContent = list.length + ' produits · ' + fmt(totalQ) + ' longueurs · ' + fmt(Math.round(totalKg)) + ' kg (poids théorique)';
+    $('stockSummary').textContent = list.length + ' produits · ' + fmt(totalQ) + ' longueurs' + (totalAutres ? ' · ' + fmt(totalAutres) + ' autres unités' : '') + ' · ' + fmt(Math.round(totalKg)) + ' kg (poids théorique des profilés)';
   }
   $('stockSearch').addEventListener('input', renderStock);
   $('stockList').addEventListener('click', function (e) {
@@ -466,10 +466,17 @@
     $('prodCode').textContent = p.code; $('prodDesc').textContent = p.description;
     $('prodMeta').textContent = (p.kg_m ? p.kg_m + ' kg/m · ' : '') + (p.longueur_m ? 'longueur ' + p.longueur_m + ' m' : '') + (p.note ? ' · ' + p.note : '');
     var m = state.stock[p.id] || {};
+    var label = state.mode === 'sortie' ? 'sortie' : state.mode === 'retour' ? 'retour' : 'compté';
+    if (!p.suivi_couleur) {
+      // article sans suivi de couleur (quincaillerie, vitrage, consommables…) : une seule ligne
+      var curTot = prodQty(p.id);
+      $('prodLines').innerHTML = '<div class="line"><div class="cname">' + esc(unitLabel(p, 2)) + '</div><div class="cur">stock ' + fmt(curTot) + '</div><input type="number" inputmode="decimal" min="0" step="1" data-col="" placeholder="' + label + '"></div>';
+      $('moreColors').classList.add('hidden'); $('newColorRow').classList.add('hidden');
+      return;
+    }
     var cols = state.couleurs.filter(function (c) { return c.actif; });
     var visible = cols.filter(function (c) { return state.showAll || state.mode === 'ajustement' || Number(m[c.id] || 0) !== 0; });
     if (!visible.length) visible = cols.slice(0, 1);
-    var label = state.mode === 'sortie' ? 'sortie' : state.mode === 'retour' ? 'retour' : 'compté';
     $('prodLines').innerHTML = visible.map(function (c) {
       var cur = Number(m[c.id] || 0);
       return '<div class="line"><div class="cname">' + esc(c.nom) + '</div><div class="cur">stock ' + fmt(cur) + '</div><input type="number" inputmode="decimal" min="0" step="1" data-col="' + c.id + '" placeholder="' + label + '"></div>';
@@ -489,11 +496,12 @@
     Array.prototype.forEach.call($('prodLines').querySelectorAll('input'), function (inp) {
       if (inp.value === '') return;
       var v = Number(inp.value); if (isNaN(v) || v < 0) { errors.push('Quantité invalide'); return; }
-      var col = Number(inp.dataset.col); var cur = Number(m[col] || 0);
-      if (state.mode === 'sortie' && v > cur) { errors.push(p.code + ' ' + colorName(col) + ' : seulement ' + fmt(cur) + ' en stock'); return; }
+      var col = inp.dataset.col ? Number(inp.dataset.col) : null;
+      var cur = col === null ? prodQty(p.id) : Number(m[col] || 0);
+      if (state.mode === 'sortie' && v > cur) { errors.push(p.code + (col === null ? '' : ' ' + colorName(col)) + ' : seulement ' + fmt(cur) + ' en stock'); return; }
       if (state.mode !== 'ajustement' && v === 0) return;
       state.cart = state.cart.filter(function (l) { return !(l.produit_id === p.id && l.couleur_id === col); });
-      state.cart.push({ produit_id: p.id, code: p.code, couleur_id: col, couleur: colorName(col), qty: v, cur: cur });
+      state.cart.push({ produit_id: p.id, code: p.code, couleur_id: col, couleur: col === null ? '' : colorName(col), qty: v, cur: cur });
       added++;
     });
     if (errors.length) { toast(errors[0], 4000); return; }
@@ -814,7 +822,9 @@
         var code = a.nouveauCode.trim();
         var existing = matchProduit(code);
         if (existing) { a.produit = existing; continue; }
-        var pr = await sb.from('produits').insert({ famille_id: a.famille_id, code: code, code_lu: a.src.code || null, description: a.nouvelleDesc || a.src.description, unite: a.unite || 'pièce', fournisseur: fournisseur, fournisseur_code: a.src.code || null, unite_facture: a.src.unite || null, facteur_unite: a.facteur || 1, suivi_couleur: false, longueur_m: a.unite === 'longueur' && a.src.longueur_pi ? Math.round(a.src.longueur_pi * 0.3048 * 1000) / 1000 : null }).select().single();
+        var famNew = state.familles.filter(function (x) { return x.id === a.famille_id; })[0];
+        var suiviCouleur = !!famNew && (famNew.code === 'CS' || famNew.code === 'ISO');
+        var pr = await sb.from('produits').insert({ famille_id: a.famille_id, code: code, code_lu: a.src.code || null, description: a.nouvelleDesc || a.src.description, unite: a.unite || 'pièce', fournisseur: fournisseur, fournisseur_code: a.src.code || null, unite_facture: a.src.unite || null, facteur_unite: a.facteur || 1, suivi_couleur: suiviCouleur, longueur_m: a.unite === 'longueur' && a.src.longueur_pi ? Math.round(a.src.longueur_pi * 0.3048 * 1000) / 1000 : null }).select().single();
         if (pr.error) throw new Error('Produit ' + code + ' : ' + pr.error.message);
         a.produit = pr.data; state.produits.push(pr.data);
         if (a.src.code && codeKey(a.src.code) !== codeKey(code)) { await sb.from('produit_alias').insert({ produit_id: pr.data.id, fournisseur: fournisseur, alias: a.src.code }); state.alias.push({ produit_id: pr.data.id, fournisseur: fournisseur, alias: a.src.code }); }
@@ -827,9 +837,11 @@
         var qStock = isAct ? Number(l.src.quantite) * (l.facteur || 1) : null;
         var part = (isAct && base > 0) ? fraisTot * montant / base : 0;
         var cout = (isAct && qStock > 0) ? (montant + part) / qStock : null;
-        lignesRows.push({ facture_id: factureId, no_ligne: l.src.no_ligne, code_fournisseur: l.src.code, description: l.src.description, quantite: l.src.quantite, unite_facture: l.src.unite, prix_unitaire: l.src.prix_unitaire, montant: montant, produit_id: isAct && l.produit ? l.produit.id : null, quantite_stock: qStock, couleur_id: isAct ? l.couleur_id : null, cout_unitaire_stock: cout, traitement: l.traitement });
+        // la couleur n'est conservée que pour les produits suivis par couleur (profilés)
+        var colId = (isAct && l.produit && l.produit.suivi_couleur) ? (l.couleur_id || null) : null;
+        lignesRows.push({ facture_id: factureId, no_ligne: l.src.no_ligne, code_fournisseur: l.src.code, description: l.src.description, quantite: l.src.quantite, unite_facture: l.src.unite, prix_unitaire: l.src.prix_unitaire, montant: montant, produit_id: isAct && l.produit ? l.produit.id : null, quantite_stock: qStock, couleur_id: colId, cout_unitaire_stock: cout, traitement: l.traitement });
         if (l.traitement === 'stock' && l.produit && qStock > 0) {
-          mvts.push({ type: 'entree', produit_id: l.produit.id, couleur_id: l.couleur_id || null, quantite: qStock, facture_id: factureId, cout_unitaire: cout, note: fournisseur + ' n° ' + numero, utilisateur: state.nom, date_mvt: ($('fDate').value ? $('fDate').value + 'T12:00:00' : new Date().toISOString()) });
+          mvts.push({ type: 'entree', produit_id: l.produit.id, couleur_id: colId, quantite: qStock, facture_id: factureId, cout_unitaire: cout, note: fournisseur + ' n° ' + numero, utilisateur: state.nom, date_mvt: ($('fDate').value ? $('fDate').value + 'T12:00:00' : new Date().toISOString()) });
           coutMaj.push({ id: l.produit.id, cout: cout });
         }
       });

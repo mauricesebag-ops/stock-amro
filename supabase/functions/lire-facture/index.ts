@@ -76,7 +76,7 @@ Règles :
 - Un document intitulé pro-forma, devis, soumission, quotation est "proforma". Un bon de livraison, packing slip, delivery note est "bon_livraison".
 - Si la facture nomme un projet, un chantier, un job, un client final (ex. "Projet : ARIE", "Job : École Saint-Thomas", "Saint-Patrice"), mets-le dans projet_detecte. Un numéro de bon de commande qui contient un nom (ex. "RBL 260408-1_Flora") donne aussi le projet (Flora).
 - Les montants sont des nombres, sans symbole, point décimal.
-Réponds uniquement avec l'outil fourni.`;
+Réponds uniquement avec le JSON demandé.`;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -104,17 +104,17 @@ Deno.serve(async (req: Request) => {
   if (body.pdf_base64.length > 28_000_000) return json(413, { error: "PDF trop volumineux (max ~20 Mo)" });
 
   // 3. Appeler Claude
+  // Sortie structurée : le modèle doit répondre avec un JSON conforme au schéma (output_config.format).
   const payload = {
     model: MODEL,
     max_tokens: 8000,
     system: SYSTEM,
-    tools: [{ name: "facture_lue", description: "Résultat structuré de la lecture de la facture", input_schema: SCHEMA }],
-    tool_choice: { type: "tool", name: "facture_lue" },
+    output_config: { format: { type: "json_schema", schema: SCHEMA } },
     messages: [{
       role: "user",
       content: [
         { type: "document", source: { type: "base64", media_type: "application/pdf", data: body.pdf_base64 }, title: body.nom_fichier || "facture.pdf" },
-        { type: "text", text: "Lis cette facture et remplis l'outil facture_lue." },
+        { type: "text", text: "Lis cette facture et renvoie le JSON de lecture (fournisseur, numéro, date, type de document, lignes, frais, totaux, projet détecté, remarques)." },
       ],
     }],
   };
@@ -129,11 +129,16 @@ Deno.serve(async (req: Request) => {
     return json(502, { error: "Erreur de l'API Claude (" + resp.status + ")", detail: txt.slice(0, 500) });
   }
   const data = await resp.json();
-  const toolUse = (data.content || []).find((c: { type: string }) => c.type === "tool_use");
-  if (!toolUse) return json(502, { error: "Claude n'a pas renvoyé de lecture structurée", detail: JSON.stringify(data).slice(0, 500) });
+  if (data.stop_reason === "refusal") return json(502, { error: "Claude a refusé de lire ce document", detail: JSON.stringify(data).slice(0, 500) });
+  if (data.stop_reason === "max_tokens") return json(502, { error: "Lecture tronquée (document trop long)", detail: "max_tokens atteint" });
+  const textBlock = (data.content || []).find((c: { type: string }) => c.type === "text");
+  if (!textBlock?.text) return json(502, { error: "Claude n'a pas renvoyé de lecture structurée", detail: JSON.stringify(data).slice(0, 500) });
+  let lecture: unknown;
+  try { lecture = JSON.parse(textBlock.text); }
+  catch { return json(502, { error: "Réponse de Claude illisible (JSON invalide)", detail: textBlock.text.slice(0, 500) }); }
 
   return json(200, {
-    lecture: toolUse.input,
+    lecture,
     modele: MODEL,
     usage: data.usage,
     duree_ms: Date.now() - t0,
