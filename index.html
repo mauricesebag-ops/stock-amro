@@ -122,6 +122,7 @@
   </header>
 
   <main>
+    <div id="diag" class="card hidden" style="border-color:#FCA5A5;background:#FEF2F2"></div>
     <!-- STOCK -->
     <section id="view-stock">
       <div class="card">
@@ -253,13 +254,30 @@
   }
 
   // ---------- Chargement ----------
+  function diag(msg) {
+    var d = $('diag'); if (!msg) { d.classList.add('hidden'); d.innerHTML = ''; return; }
+    d.classList.remove('hidden'); d.innerHTML = msg;
+  }
+  function storageOk() { try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; } catch (e) { return false; } }
   async function loadAll() {
+    diag('');
     var r1 = await sb.from('familles').select('*').order('ordre');
     var r2 = await sb.from('couleurs').select('*').order('ordre').order('nom');
     var r3 = await sb.from('produits').select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note').eq('actif', true).order('code');
     var r4 = await sb.from('projets').select('*').order('nom');
-    if (r1.error || r2.error || r3.error || r4.error) { toast('Erreur de chargement : ' + ((r1.error || r2.error || r3.error || r4.error).message), 5000); return; }
-    state.familles = r1.data; state.couleurs = r2.data; state.produits = r3.data; state.projets = r4.data;
+    var err = r1.error || r2.error || r3.error || r4.error;
+    if (err || !r3.data || !r3.data.length) {
+      var s = await sb.auth.getSession();
+      var lines = ['<strong>La page n’arrive pas à lire la base de données.</strong>'];
+      if (err) lines.push('Message reçu : <code>' + esc(err.message || JSON.stringify(err)) + '</code>');
+      else lines.push('La base a répondu sans erreur mais avec 0 produit : la demande est partie sans identité de connexion.');
+      lines.push('Session reconnue : ' + (s.data && s.data.session ? 'oui (' + esc(s.data.session.user.email) + ')' : '<strong>non</strong>'));
+      lines.push('Mémoire locale du navigateur : ' + (storageOk() ? 'accessible' : '<strong>bloquée</strong>'));
+      lines.push('Cause la plus fréquente : une extension du navigateur (bloqueur de publicités ou de pisteurs, nettoyeur de cookies, assistant). Essaie en navigation privée ou désactive les extensions sur ce site, puis recharge la page.');
+      diag(lines.join('<br>'));
+      if (err) return;
+    }
+    state.familles = r1.data || []; state.couleurs = r2.data || []; state.produits = r3.data || []; state.projets = r4.data || [];
     await loadStock();
     fillProjetSelect();
   }
@@ -285,8 +303,8 @@
     Array.prototype.forEach.call($('nav').querySelectorAll('button'), function (b) { b.classList.toggle('active', b.dataset.view === v); });
     ['stock', 'mvt', 'projets', 'histo'].forEach(function (k) { $('view-' + k).classList.toggle('hidden', !(k === v || (v === 'ajust' && k === 'mvt'))); });
     if (v === 'stock') renderStock();
-    if (v === 'mvt') { if (state.mode === 'ajustement') setMode('sortie'); else setMode(state.mode); }
-    if (v === 'ajust') setMode('ajustement');
+    if (v === 'mvt') { if (state.mode === 'ajustement') setMode('sortie'); else setMode(state.mode); renderMvtResults(); }
+    if (v === 'ajust') { setMode('ajustement'); renderMvtResults(); }
     if (v === 'projets') renderProjets();
     if (v === 'histo') loadHisto();
     window.scrollTo(0, 0);
@@ -343,16 +361,17 @@
     $('cartValidate').textContent = mode === 'sortie' ? 'Valider la sortie' : mode === 'retour' ? 'Valider le retour' : 'Valider l’ajustement';
     if (state.prod) renderProd();
   }
-  $('mvtSearch').addEventListener('input', function () {
+  function renderMvtResults() {
     var q = $('mvtSearch').value; var box = $('mvtResults');
-    if (!q.trim()) { box.innerHTML = ''; return; }
-    var list = filterProduits(q, '').slice(0, 12);
-    box.innerHTML = list.map(function (p) { return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) + '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div></div><div class="qty"><div class="n">' + fmt(prodQty(p.id)) + '</div><div class="u">' + unitLabel(p, prodQty(p.id)) + '</div></div></button>'; }).join('') || '<div class="muted">Aucun résultat.</div>';
-  });
+    var list = filterProduits(q, '');
+    var hint = q.trim() ? '' : '<div class="muted small" style="margin-bottom:6px">Tous les produits (' + list.length + '). Tape un code ou un mot pour filtrer.</div>';
+    box.innerHTML = hint + list.map(function (p) { return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) + '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div></div><div class="qty"><div class="n">' + fmt(prodQty(p.id)) + '</div><div class="u">' + unitLabel(p, prodQty(p.id)) + '</div></div></button>'; }).join('') || '<div class="muted">Aucun résultat.</div>';
+  }
+  $('mvtSearch').addEventListener('input', renderMvtResults);
   $('mvtResults').addEventListener('click', function (e) { var b = e.target.closest('.item'); if (!b) return; selectProduit(b.dataset.id); });
   function selectProduit(id) {
     state.prod = state.produits.filter(function (p) { return p.id === id; })[0]; state.showAll = false;
-    $('mvtSearch').value = ''; $('mvtResults').innerHTML = '';
+    $('mvtSearch').value = ''; $('mvtResults').innerHTML = '<div class="muted small">Produit choisi ci-dessous. Tape un code pour en choisir un autre.</div>';
     renderProd();
     $('prodCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
