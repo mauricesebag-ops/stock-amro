@@ -419,7 +419,7 @@
     var html = list.map(function (p) {
       var m = state.stock[p.id] || {}; var t = prodQty(p.id); if (p.unite === 'longueur') totalQ += t; else totalAutres += t;
       var kg = (p.kg_m && p.longueur_m) ? t * p.kg_m * p.longueur_m : 0; totalKg += kg;
-      var cols = Object.keys(m).filter(function (k) { return Number(m[k]) !== 0; }).map(function (k) { return '<span class="pill">' + esc(colorName(Number(k))) + ' ' + fmt(m[k]) + '</span>'; }).join('');
+      var cols = !p.suivi_couleur ? '' : Object.keys(m).filter(function (k) { return Number(m[k]) !== 0; }).map(function (k) { return '<span class="pill">' + esc(colorName(Number(k))) + ' ' + fmt(m[k]) + '</span>'; }).join('');
       return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) +
         '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div><div class="colors">' + cols + '</div></div>' +
         '<div class="qty"><div class="n">' + fmt(t) + '</div><div class="u">' + unitLabel(p, t) + (kg ? ' · ' + fmt(Math.round(kg)) + ' kg' : '') + '</div></div></button>';
