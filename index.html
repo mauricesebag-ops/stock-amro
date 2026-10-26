@@ -90,6 +90,30 @@
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1F2330; color:#fff; padding:12px 18px; border-radius:10px; font-weight:600; opacity:0; transition:opacity .2s; pointer-events:none; z-index:50; max-width:90vw; text-align:center; }
   #toast.show { opacity:1; }
   .stickybar { position:sticky; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:12px 16px; margin:0 -16px -16px; border-radius:0 0 var(--radius) var(--radius); }
+  /* Factures */
+  .drop { border:2px dashed #C7D2FE; background:#F5F7FF; border-radius:var(--radius); padding:28px 16px; text-align:center; color:var(--muted); cursor:pointer; }
+  .drop.over { background:#EEF2FF; border-color:var(--accent); color:var(--accent-dark); }
+  .drop strong { color:var(--text); }
+  .fstat { display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); font-size:15px; }
+  .fstat:last-child { border-bottom:none; }
+  .fstat .dot { width:10px; height:10px; border-radius:50%; background:#D1D5DB; flex:none; }
+  .fstat .dot.run { background:var(--accent); animation:pulse 1s infinite; }
+  .fstat .dot.ok { background:var(--ok); } .fstat .dot.bad { background:var(--bad); } .fstat .dot.dup { background:var(--warn); }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; }
+  .grid2 .field { margin:0; }
+  .grid2 .field input, .grid2 .field select { min-height:44px; padding:8px 10px; }
+  .notice { border-radius:10px; padding:10px 12px; font-size:15px; margin-top:10px; }
+  .notice.info { background:#EEF2FF; color:#3730A3; }
+  .notice.warn { background:#FEF3C7; color:#92400E; }
+  .notice.bad { background:#FEE2E2; color:#991B1B; }
+  .ftable { width:100%; border-collapse:collapse; font-size:14px; }
+  .ftable th, .ftable td { padding:6px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .ftable input, .ftable select { width:100%; min-height:38px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:#fff; }
+  .ftable input.num { width:84px; text-align:right; }
+  .ftable tr.ignore td { opacity:.45; }
+  .ftable .new { color:var(--accent-dark); font-weight:600; font-size:13px; }
+  .ftable .match { color:var(--ok); font-weight:600; font-size:13px; }
   @media (max-width:520px) { .prod-head .thumb { width:110px; height:76px; } .line input { width:84px; } }
 </style>
 </head>
@@ -118,6 +142,7 @@
       <button data-view="ajust">Ajustement</button>
       <button data-view="projets">Projets</button>
       <button data-view="histo">Historique</button>
+      <button data-view="factures" id="navFactures" class="hidden">Factures</button>
     </nav>
   </header>
 
@@ -206,6 +231,61 @@
         <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Type</th><th>Profilé</th><th>Couleur</th><th class="num">Qté</th><th>Projet</th><th>Qui</th><th>Note</th><th></th></tr></thead><tbody id="histoBody"></tbody></table></div>
       </div>
     </section>
+
+    <!-- FACTURES -->
+    <section id="view-factures" class="hidden">
+      <div class="card">
+        <h2>Déposer des factures (PDF)</h2>
+        <div class="drop" id="drop">
+          <strong>Glisse les PDF ici</strong> ou clique pour choisir des fichiers<br>
+          <span class="small">Chaque facture est lue, puis affichée pour vérification avant d'être enregistrée.</span>
+          <input id="fileInput" type="file" accept="application/pdf" multiple class="hidden">
+        </div>
+        <div id="fileStatus" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card hidden" id="factCard">
+        <h2 id="factTitle">Vérifier la facture</h2>
+        <div id="factNotices"></div>
+        <div class="grid2" style="margin-top:12px">
+          <div class="field"><label>Fournisseur</label><input id="fFournisseur"></div>
+          <div class="field"><label>N° de facture</label><input id="fNumero"></div>
+          <div class="field"><label>Date</label><input id="fDate" type="date"></div>
+          <div class="field"><label>Bon de commande</label><input id="fBC"></div>
+          <div class="field"><label>Type de document</label>
+            <select id="fType">
+              <option value="stock">Achat pour le stock</option>
+              <option value="direct_projet">Achat direct pour un projet</option>
+              <option value="transformation">Transformation (peinture, anodisation, soudure)</option>
+              <option value="service">Service (installation, honoraires, main-d'œuvre)</option>
+              <option value="proforma">Pro-forma / devis (ne rien entrer)</option>
+              <option value="bon_livraison">Bon de livraison (ne rien entrer)</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="field"><label>Projet</label>
+            <div class="row" style="gap:6px"><select id="fProjet" class="grow"></select><button class="btn secondary small hidden" id="fProjetCreer">Créer</button></div>
+          </div>
+          <div class="field"><label>Sous-total ($)</label><input id="fSousTotal" type="number" step="0.01"></div>
+          <div class="field"><label>Frais annexes ($)</label><input id="fFrais" type="number" step="0.01"></div>
+          <div class="field"><label>Taxes ($)</label><input id="fTaxes" type="number" step="0.01"></div>
+          <div class="field"><label>Total ($)</label><input id="fTotal" type="number" step="0.01"></div>
+        </div>
+        <div class="small muted" id="fFraisDetail" style="margin-top:6px"></div>
+        <div style="overflow-x:auto;margin-top:14px">
+          <table class="ftable"><thead><tr><th>#</th><th>Code</th><th>Description</th><th>Qté</th><th>Unité</th><th>Prix</th><th>Montant</th><th>Traitement</th><th>Produit dans l'outil</th><th>Couleur</th></tr></thead><tbody id="fLignes"></tbody></table>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn secondary small" id="fAnnuler">Annuler</button>
+          <button class="btn grow" id="fValider">Enregistrer la facture</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Factures enregistrées</h2><button class="btn secondary small" id="fRefresh">Actualiser</button></div>
+        <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Date</th><th>Fournisseur</th><th>N°</th><th>Type</th><th>Projet</th><th class="num">Sous-total</th><th>Par</th><th></th></tr></thead><tbody id="fListe"></tbody></table></div>
+      </div>
+    </section>
   </main>
 </div>
 <div id="toast"></div>
@@ -249,6 +329,7 @@
     state.nom = (session.user.user_metadata && session.user.user_metadata.nom) || session.user.email;
     $('whoName').textContent = state.nom;
     $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+    $('navFactures').classList.toggle('hidden', !(state.role === 'admin' || state.role === 'factures'));
     await loadAll();
     renderStock();
   }
@@ -278,6 +359,8 @@
       if (err) return;
     }
     state.familles = r1.data || []; state.couleurs = r2.data || []; state.produits = r3.data || []; state.projets = r4.data || [];
+    var r5 = await sb.from('produit_alias').select('produit_id,fournisseur,alias');
+    state.alias = r5.data || [];
     await loadStock();
     fillProjetSelect();
   }
@@ -301,7 +384,8 @@
   function showView(v) {
     state.view = v;
     Array.prototype.forEach.call($('nav').querySelectorAll('button'), function (b) { b.classList.toggle('active', b.dataset.view === v); });
-    ['stock', 'mvt', 'projets', 'histo'].forEach(function (k) { $('view-' + k).classList.toggle('hidden', !(k === v || (v === 'ajust' && k === 'mvt'))); });
+    ['stock', 'mvt', 'projets', 'histo', 'factures'].forEach(function (k) { $('view-' + k).classList.toggle('hidden', !(k === v || (v === 'ajust' && k === 'mvt'))); });
+    if (v === 'factures') loadFactures();
     if (v === 'stock') renderStock();
     if (v === 'mvt') { if (state.mode === 'ajustement') setMode('sortie'); else setMode(state.mode); renderMvtResults(); }
     if (v === 'ajust') { setMode('ajustement'); renderMvtResults(); }
@@ -488,6 +572,294 @@
     var r = await sb.from('mouvements').delete().eq('id', b.dataset.del);
     if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
     await loadStock(); loadHisto(); toast('Mouvement supprimé');
+  });
+
+  // ---------- Factures ----------
+  var F = { file:null, hash:null, lecture:null, lignes:[], projetNouveau:null };
+  var UNITES = { EA:'pièce', CH:'pièce', PCE:'pièce', PC:'pièce', UN:'pièce', U:'pièce', PR:'paire', BT:'boîte', BX:'boîte', PQT:'paquet', PK:'paquet', SA:'sac', RL:'rouleau', FL:'feuille', SH:'feuille', KG:'kg', LB:'lb', M:'mètre', PI:'pied', FT:'pied', L:'litre', GAL:'gallon' };
+  function codeKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function codeCandidates(code) {
+    var k = codeKey(code); if (!k) return [];
+    var out = [k];
+    if (/^VI\d/.test(k)) out.push('V' + k.slice(2));
+    if (/^SO\d/.test(k)) out.push('S' + k.slice(2));
+    var m = k.match(/^([A-Z]*\d{3,6})(\d{2,3}|000|24|20)$/); if (m) out.push(m[1]);
+    var dash = String(code || '').split(/[-_\s]/)[0]; if (dash && codeKey(dash) !== k) out.push(codeKey(dash));
+    return out;
+  }
+  function matchProduit(code, fournisseur) {
+    var cands = codeCandidates(code); if (!cands.length) return null;
+    var byKey = {};
+    state.produits.forEach(function (p) { byKey[codeKey(p.code)] = p; if (p.code_lu) byKey[codeKey(p.code_lu)] = byKey[codeKey(p.code_lu)] || p; if (p.fournisseur_code) byKey[codeKey(p.fournisseur_code)] = byKey[codeKey(p.fournisseur_code)] || p; });
+    (state.alias || []).forEach(function (a) { var p = state.produits.filter(function (x) { return x.id === a.produit_id; })[0]; if (p) byKey[codeKey(a.alias)] = byKey[codeKey(a.alias)] || p; });
+    for (var i = 0; i < cands.length; i++) { if (byKey[cands[i]]) return byKey[cands[i]]; }
+    return null;
+  }
+  function familleParDefaut(l, p) {
+    if (p) return p.famille_id;
+    var k = codeKey(l.code);
+    var fam = function (c) { var f = state.familles.filter(function (x) { return x.code === c; })[0]; return f ? f.id : null; };
+    if (/^(V|S|MS|MDS|MH|VI|SO)\d{3,}/.test(k) && (l.longueur_pi || l.poids_kg || /profil|extru|frame|sash|cadre|meneau/i.test(l.description))) return fam('ISO');
+    if (/verre|vitr|glass|unit[eé]s? scell|igu/i.test(l.description)) return fam('VITR');
+    if (/scell|silicone|mousse|foam|ruban|tape|adh[eé]s|nettoy|colle|lubrif|disque|lame/i.test(l.description)) return fam('CONSO');
+    return fam('QUINC');
+  }
+  function couleurParDefaut(txt) {
+    var t = String(txt || '').toLowerCase();
+    var find = function (n) { var c = state.couleurs.filter(function (x) { return x.nom.toLowerCase() === n; })[0]; return c ? c.id : null; };
+    if (/blanc|white/.test(t)) return find('blanc');
+    if (/noir|black/.test(t)) return find('noir');
+    if (/brut|mill|natur|anod|clair/.test(t)) return find('naturel');
+    return find('non précisée');
+  }
+  async function sha256Hex(buf) { var h = await crypto.subtle.digest('SHA-256', buf); return Array.prototype.map.call(new Uint8Array(h), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+  function toBase64(buf) { var bytes = new Uint8Array(buf); var s = ''; for (var i = 0; i < bytes.length; i += 0x8000) { s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); } return btoa(s); }
+  function fileStatus(id, cls, txt) {
+    var box = $('fileStatus'); var el = document.getElementById('fs-' + id);
+    if (!el) { el = document.createElement('div'); el.className = 'fstat'; el.id = 'fs-' + id; box.appendChild(el); }
+    el.innerHTML = '<span class="dot ' + cls + '"></span><span>' + txt + '</span>';
+  }
+
+  var dz = $('drop');
+  dz.addEventListener('click', function () { $('fileInput').click(); });
+  ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('over'); }); });
+  dz.addEventListener('drop', function (e) { handleFiles(e.dataTransfer.files); });
+  $('fileInput').addEventListener('change', function () { handleFiles(this.files); this.value = ''; });
+  document.addEventListener('dragover', function (e) { e.preventDefault(); }); document.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  var queue = []; var busy = false;
+  function handleFiles(files) {
+    Array.prototype.forEach.call(files, function (f) {
+      if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) { fileStatus(Math.random().toString(36).slice(2), 'bad', esc(f.name) + ' : pas un PDF, ignoré'); return; }
+      queue.push(f);
+    });
+    runQueue();
+  }
+  async function runQueue() {
+    if (busy || !queue.length) return;
+    if (F.lecture) { toast('Termine (ou annule) la facture affichée avant de passer à la suivante', 3500); return; }
+    busy = true;
+    var f = queue.shift(); var id = Math.random().toString(36).slice(2);
+    try {
+      fileStatus(id, 'run', esc(f.name) + ' : calcul de l’empreinte…');
+      var buf = await f.arrayBuffer(); var hash = await sha256Hex(buf);
+      var dup = await sb.from('factures').select('id,fournisseur,numero,date_facture,statut,valide_le').eq('fichier_hash', hash).maybeSingle();
+      if (dup.data) { fileStatus(id, 'dup', esc(f.name) + ' : <strong>déjà déposée</strong> (' + esc(dup.data.fournisseur || '') + ' n° ' + esc(dup.data.numero || '') + ', ' + esc(dup.data.statut) + '). Ignorée.'); busy = false; runQueue(); return; }
+      fileStatus(id, 'run', esc(f.name) + ' : lecture par l’IA en cours (10 à 30 s)…');
+      var r = await sb.functions.invoke('lire-facture', { body: { pdf_base64: toBase64(buf), nom_fichier: f.name } });
+      if (r.error) {
+        var msg = r.error.message || String(r.error);
+        try { var ctx = r.error.context; if (ctx && ctx.json) { var j = await ctx.json(); if (j && j.error) msg = j.error + (j.detail ? ' — ' + j.detail : ''); } } catch (e2) {}
+        fileStatus(id, 'bad', esc(f.name) + ' : ' + esc(msg)); busy = false; runQueue(); return;
+      }
+      var lecture = r.data.lecture;
+      var dup2 = (lecture.fournisseur && lecture.numero) ? await sb.from('factures').select('id,statut,date_facture').ilike('fournisseur', lecture.fournisseur).eq('numero', lecture.numero).maybeSingle() : { data: null };
+      fileStatus(id, 'ok', esc(f.name) + ' : lue (' + esc(lecture.fournisseur) + ' n° ' + esc(lecture.numero) + ', ' + (lecture.lignes || []).length + ' lignes, confiance ' + Math.round((lecture.confiance || 0) * 100) + ' %)');
+      ouvrirValidation(f, hash, lecture, dup2.data, r.data);
+    } catch (e) {
+      fileStatus(id, 'bad', esc(f.name) + ' : ' + esc(e.message || e));
+    }
+    busy = false;
+    if (!F.lecture) runQueue();
+  }
+
+  function ouvrirValidation(file, hash, L, dupFacture, meta) {
+    F = { file: file, hash: hash, lecture: L, meta: meta, lignes: [], projetNouveau: null };
+    $('factCard').classList.remove('hidden');
+    $('factTitle').textContent = 'Vérifier : ' + file.name;
+    var notices = [];
+    if (dupFacture) notices.push('<div class="notice warn">Une facture <strong>' + esc(L.fournisseur) + ' n° ' + esc(L.numero) + '</strong> existe déjà (' + esc(dupFacture.statut) + ', ' + esc(dupFacture.date_facture || '') + '). Vérifie qu’il ne s’agit pas d’un doublon avant d’enregistrer.</div>');
+    if (L.type_document === 'proforma' || L.type_document === 'bon_livraison') notices.push('<div class="notice bad">Ce document semble être un <strong>' + (L.type_document === 'proforma' ? 'pro-forma / devis' : 'bon de livraison') + '</strong> : aucune quantité ne sera entrée en stock. Si c’est une erreur, change le type ci-dessous.</div>');
+    if (L.type_document === 'service') notices.push('<div class="notice info">Facture de <strong>service</strong> : rien n’entre en stock ; le montant sera attribué au coût du projet choisi.</div>');
+    if (L.type_document === 'direct_projet') notices.push('<div class="notice info"><strong>Achat direct pour un projet</strong> : les articles ne passent pas par le stock ; leur coût est attribué au projet.</div>');
+    if (L.type_document === 'transformation') notices.push('<div class="notice warn"><strong>Transformation</strong> (peinture, anodisation, soudure) : le coût est enregistré sur la facture et le projet ; le changement de couleur des profilés se fera par un ajustement dans une version suivante.</div>');
+    if (L.adresse_livraison_differente) notices.push('<div class="notice warn">L’adresse de livraison n’est pas celle d’Amro : le matériel est-il passé par le magasin ?</div>');
+    if (L.type_justification) notices.push('<div class="small muted" style="margin-top:6px">Lecture : ' + esc(L.type_justification) + '</div>');
+    if (L.remarques) notices.push('<div class="small muted">Remarques de la lecture : ' + esc(L.remarques) + '</div>');
+    $('factNotices').innerHTML = notices.join('');
+    $('fFournisseur').value = L.fournisseur || ''; $('fNumero').value = L.numero || ''; $('fDate').value = L.date || ''; $('fBC').value = L.bon_commande || '';
+    $('fType').value = L.type_document || 'stock';
+    var fraisTot = (L.frais || []).reduce(function (s, x) { return s + Number(x.montant || 0); }, 0);
+    $('fSousTotal').value = L.sous_total != null ? L.sous_total : ''; $('fFrais').value = fraisTot.toFixed(2); $('fTaxes').value = L.taxes != null ? L.taxes : ''; $('fTotal').value = L.total != null ? L.total : '';
+    $('fFraisDetail').textContent = (L.frais || []).length ? 'Frais annexes lus : ' + L.frais.map(function (x) { return x.libelle + ' ' + fmt(x.montant) + ' $'; }).join(' · ') + ' — répartis au prorata dans le coût des articles.' : '';
+    // projet
+    fillFactProjet(L.projet_detecte);
+    // lignes
+    F.lignes = (L.lignes || []).map(function (l, i) {
+      var p = l.nature === 'produit' ? matchProduit(l.code, L.fournisseur) : null;
+      var trait = l.nature === 'frais' ? 'frais' : l.nature === 'service' ? 'service' : (L.type_document === 'direct_projet' ? 'direct_projet' : L.type_document === 'transformation' ? 'transformation' : L.type_document === 'service' ? 'service' : 'stock');
+      if (L.type_document === 'proforma' || L.type_document === 'bon_livraison') trait = 'ignore';
+      var uf = String(l.unite || '').toUpperCase().replace(/[^A-Z]/g, '');
+      var unite = p ? p.unite : (UNITES[uf] || (l.longueur_pi ? 'longueur' : 'pièce'));
+      return { i: i, src: l, produit: p, traitement: trait, nouveauCode: p ? p.code : (l.code || ''), nouvelleDesc: l.description || '', famille_id: familleParDefaut(l, p), unite: unite, facteur: 1, couleur_id: couleurParDefaut(l.couleur || l.description) };
+    });
+    renderFactLignes();
+    $('factCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function fillFactProjet(detecte) {
+    var s = $('fProjet'); s.innerHTML = '<option value="">— Aucun / à choisir —</option>';
+    var found = null; var nd = norm(detecte);
+    state.projets.filter(function (p) { return p.statut === 'actif'; }).forEach(function (p) {
+      var o = document.createElement('option'); o.value = p.id; o.textContent = p.nom + (p.client ? ' (' + p.client + ')' : ''); s.appendChild(o);
+      if (nd && !found && (norm(p.nom).indexOf(nd) >= 0 || nd.indexOf(norm(p.nom)) >= 0)) found = p;
+    });
+    if (found) { s.value = found.id; $('fProjetCreer').classList.add('hidden'); }
+    else if (detecte) { $('fProjetCreer').textContent = 'Créer « ' + detecte + ' »'; $('fProjetCreer').classList.remove('hidden'); }
+    else $('fProjetCreer').classList.add('hidden');
+  }
+  $('fProjetCreer').addEventListener('click', async function () {
+    var nom = (F.lecture && F.lecture.projet_detecte) || ''; if (!nom) return;
+    var r = await sb.from('projets').insert({ nom: nom, date_debut: $('fDate').value || null, cree_depuis_facture: true }).select().single();
+    if (r.error) { toast('Impossible de créer le projet : ' + r.error.message, 4000); return; }
+    state.projets.push(r.data); fillProjetSelect(); fillFactProjet(nom); $('fProjet').value = r.data.id; $('fProjetCreer').classList.add('hidden'); toast('Projet « ' + nom + ' » créé');
+  });
+  $('fType').addEventListener('change', function () {
+    var t = this.value;
+    F.lignes.forEach(function (l) {
+      if (l.src.nature === 'frais') { l.traitement = 'frais'; return; }
+      if (t === 'proforma' || t === 'bon_livraison') l.traitement = 'ignore';
+      else if (t === 'service') l.traitement = 'service';
+      else if (t === 'direct_projet') l.traitement = l.src.nature === 'service' ? 'service' : 'direct_projet';
+      else if (t === 'transformation') l.traitement = 'transformation';
+      else l.traitement = l.src.nature === 'service' ? 'service' : 'stock';
+    });
+    renderFactLignes();
+  });
+  function famOptions(sel) { return state.familles.map(function (f) { return '<option value="' + f.id + '"' + (f.id === sel ? ' selected' : '') + '>' + esc(f.nom) + '</option>'; }).join(''); }
+  function couleurOptions(sel) { return state.couleurs.filter(function (c) { return c.actif; }).map(function (c) { return '<option value="' + c.id + '"' + (c.id === sel ? ' selected' : '') + '>' + esc(c.nom) + '</option>'; }).join(''); }
+  function renderFactLignes() {
+    var tb = $('fLignes');
+    tb.innerHTML = F.lignes.map(function (l) {
+      var s = l.src; var isStock = l.traitement === 'stock' || l.traitement === 'direct_projet' || l.traitement === 'transformation';
+      var prodCell = '';
+      if (isStock) {
+        if (l.produit) prodCell = '<div class="match">✓ ' + esc(l.produit.code) + '</div><div class="small muted">' + esc(l.produit.description || '') + ' · unité : ' + esc(l.produit.unite) + '</div>';
+        else prodCell = '<div class="new">Nouveau produit</div>' +
+          '<input data-k="nouveauCode" data-i="' + l.i + '" value="' + esc(l.nouveauCode) + '" placeholder="Code dans l’outil" style="margin-top:4px">' +
+          '<select data-k="famille_id" data-i="' + l.i + '" style="margin-top:4px">' + famOptions(l.famille_id) + '</select>' +
+          '<div class="row" style="gap:4px;margin-top:4px;flex-wrap:nowrap"><input data-k="unite" data-i="' + l.i + '" value="' + esc(l.unite) + '" placeholder="unité de stock" title="Unité dans laquelle le magasin compte cet article"><input data-k="facteur" data-i="' + l.i + '" class="num" type="number" step="any" value="' + l.facteur + '" title="Nombre d’unités de stock par unité facturée (ex. 5 si la facture vend des paquets de 5 et que le magasin compte à la pièce)"></div>';
+      } else prodCell = '<span class="muted small">—</span>';
+      var famCode = (function () { var fid = l.produit ? l.produit.famille_id : l.famille_id; var f = state.familles.filter(function (x) { return x.id === fid; })[0]; return f ? f.code : ''; })();
+      var colCell = (isStock && (famCode === 'CS' || famCode === 'ISO')) ? '<select data-k="couleur_id" data-i="' + l.i + '">' + couleurOptions(l.couleur_id) + '</select>' : '<span class="muted small">—</span>';
+      return '<tr class="' + (l.traitement === 'ignore' ? 'ignore' : '') + '">' +
+        '<td>' + (s.no_ligne != null ? s.no_ligne : l.i + 1) + '</td>' +
+        '<td>' + esc(s.code || '') + '</td>' +
+        '<td style="min-width:200px">' + esc(s.description) + (s.couleur ? '<div class="small muted">couleur : ' + esc(s.couleur) + '</div>' : '') + (s.longueur_pi ? '<div class="small muted">' + s.longueur_pi + ' pi / longueur</div>' : '') + '</td>' +
+        '<td><input data-k="quantite" data-i="' + l.i + '" class="num" type="number" step="any" value="' + (s.quantite != null ? s.quantite : '') + '"></td>' +
+        '<td>' + esc(s.unite || '') + '</td>' +
+        '<td class="num">' + (s.prix_unitaire != null ? fmt(s.prix_unitaire) : '') + '</td>' +
+        '<td><input data-k="montant" data-i="' + l.i + '" class="num" type="number" step="0.01" value="' + (s.montant != null ? s.montant : '') + '"></td>' +
+        '<td><select data-k="traitement" data-i="' + l.i + '">' +
+          ['stock|Entrée en stock', 'direct_projet|Direct au projet', 'transformation|Transformation', 'service|Service (coût projet)', 'frais|Frais annexes (répartis)', 'ignore|Ignorer'].map(function (o) { var v = o.split('|'); return '<option value="' + v[0] + '"' + (l.traitement === v[0] ? ' selected' : '') + '>' + v[1] + '</option>'; }).join('') +
+        '</select></td>' +
+        '<td style="min-width:200px">' + prodCell + '</td>' +
+        '<td>' + colCell + '</td></tr>';
+    }).join('') || '<tr><td colspan="10" class="muted">Aucune ligne lue.</td></tr>';
+  }
+  $('fLignes').addEventListener('change', function (e) {
+    var t = e.target; var i = Number(t.dataset.i); var k = t.dataset.k; if (isNaN(i) || !k) return;
+    var l = F.lignes[i];
+    if (k === 'quantite') l.src.quantite = Number(t.value);
+    else if (k === 'montant') l.src.montant = Number(t.value);
+    else if (k === 'facteur') l.facteur = Number(t.value) || 1;
+    else if (k === 'famille_id' || k === 'couleur_id') l[k] = Number(t.value);
+    else l[k] = t.value;
+    if (k === 'nouveauCode') { var p = matchProduit(t.value); if (p) { l.produit = p; } }
+    if (k === 'traitement' || k === 'famille_id' || k === 'nouveauCode') renderFactLignes();
+  });
+  $('fAnnuler').addEventListener('click', function () { F = { lecture: null, lignes: [] }; $('factCard').classList.add('hidden'); runQueue(); });
+
+  $('fValider').addEventListener('click', async function () {
+    if (!F.lecture) return;
+    var type = $('fType').value; var projet = $('fProjet').value || null;
+    var fournisseur = $('fFournisseur').value.trim(); var numero = $('fNumero').value.trim();
+    if (!fournisseur || !numero) { toast('Fournisseur et numéro de facture sont obligatoires', 3500); return; }
+    var besoinProjet = type === 'direct_projet' || type === 'service' || F.lignes.some(function (l) { return l.traitement === 'direct_projet' || l.traitement === 'service'; });
+    if (besoinProjet && !projet) { toast('Choisis (ou crée) le projet : cette facture lui attribue des coûts', 4000); $('fProjet').focus(); return; }
+    var actives = F.lignes.filter(function (l) { return l.traitement === 'stock' || l.traitement === 'direct_projet' || l.traitement === 'transformation'; });
+    for (var i = 0; i < actives.length; i++) {
+      var l = actives[i];
+      if (!l.produit && !(l.nouveauCode || '').trim()) { toast('Ligne ' + (l.src.no_ligne || l.i + 1) + ' : donne un code au nouveau produit', 4000); return; }
+      if (!(Number(l.src.quantite) > 0)) { toast('Ligne ' + (l.src.no_ligne || l.i + 1) + ' : quantité manquante', 4000); return; }
+    }
+    $('fValider').disabled = true; $('fValider').textContent = 'Enregistrement…';
+    try {
+      // répartition des frais
+      var fraisTot = Number($('fFrais').value || 0) + F.lignes.filter(function (l) { return l.traitement === 'frais'; }).reduce(function (s, l) { return s + Number(l.src.montant || 0); }, 0);
+      var base = actives.reduce(function (s, l) { return s + Number(l.src.montant || 0); }, 0);
+      // 1. PDF
+      var chemin = null;
+      try {
+        var annee = ($('fDate').value || new Date().toISOString().slice(0, 10)).slice(0, 4);
+        chemin = annee + '/' + F.hash + '.pdf';
+        var up = await sb.storage.from('factures').upload(chemin, F.file, { contentType: 'application/pdf', upsert: false });
+        if (up.error && !/exists|duplicate/i.test(up.error.message)) { chemin = null; toast('PDF non conservé : ' + up.error.message, 4000); }
+      } catch (e) { chemin = null; }
+      // 2. facture
+      var fr = await sb.from('factures').insert({
+        fournisseur: fournisseur, numero: numero, date_facture: $('fDate').value || null, bon_commande: $('fBC').value || null,
+        type_document: type, projet_id: projet, projet_detecte: F.lecture.projet_detecte || null,
+        sous_total: Number($('fSousTotal').value || 0) || null, frais_annexes: fraisTot, taxes: Number($('fTaxes').value || 0) || null, total: Number($('fTotal').value || 0) || null,
+        total_avant_taxes: (Number($('fSousTotal').value || 0) + fraisTot) || null,
+        fichier_nom: F.file.name, fichier_hash: F.hash, fichier_chemin: chemin, lecture_brute: F.lecture,
+        statut: 'valide', valide_par: state.nom, valide_le: new Date().toISOString()
+      }).select().single();
+      if (fr.error) throw new Error(fr.error.code === '23505' ? 'Cette facture (fournisseur + numéro) existe déjà.' : fr.error.message);
+      var factureId = fr.data.id;
+      // 3. nouveaux produits
+      for (var j = 0; j < actives.length; j++) {
+        var a = actives[j];
+        if (a.produit) continue;
+        var code = a.nouveauCode.trim();
+        var existing = matchProduit(code);
+        if (existing) { a.produit = existing; continue; }
+        var pr = await sb.from('produits').insert({ famille_id: a.famille_id, code: code, code_lu: a.src.code || null, description: a.nouvelleDesc || a.src.description, unite: a.unite || 'pièce', fournisseur: fournisseur, fournisseur_code: a.src.code || null, unite_facture: a.src.unite || null, facteur_unite: a.facteur || 1, suivi_couleur: false, longueur_m: a.unite === 'longueur' && a.src.longueur_pi ? Math.round(a.src.longueur_pi * 0.3048 * 1000) / 1000 : null }).select().single();
+        if (pr.error) throw new Error('Produit ' + code + ' : ' + pr.error.message);
+        a.produit = pr.data; state.produits.push(pr.data);
+        if (a.src.code && codeKey(a.src.code) !== codeKey(code)) { await sb.from('produit_alias').insert({ produit_id: pr.data.id, fournisseur: fournisseur, alias: a.src.code }); state.alias.push({ produit_id: pr.data.id, fournisseur: fournisseur, alias: a.src.code }); }
+      }
+      // 4. lignes + mouvements
+      var lignesRows = []; var mvts = []; var coutMaj = [];
+      F.lignes.forEach(function (l) {
+        var montant = Number(l.src.montant || 0);
+        var isAct = l.traitement === 'stock' || l.traitement === 'direct_projet' || l.traitement === 'transformation';
+        var qStock = isAct ? Number(l.src.quantite) * (l.facteur || 1) : null;
+        var part = (isAct && base > 0) ? fraisTot * montant / base : 0;
+        var cout = (isAct && qStock > 0) ? (montant + part) / qStock : null;
+        lignesRows.push({ facture_id: factureId, no_ligne: l.src.no_ligne, code_fournisseur: l.src.code, description: l.src.description, quantite: l.src.quantite, unite_facture: l.src.unite, prix_unitaire: l.src.prix_unitaire, montant: montant, produit_id: isAct && l.produit ? l.produit.id : null, quantite_stock: qStock, couleur_id: isAct ? l.couleur_id : null, cout_unitaire_stock: cout, traitement: l.traitement });
+        if (l.traitement === 'stock' && l.produit && qStock > 0) {
+          mvts.push({ type: 'entree', produit_id: l.produit.id, couleur_id: l.couleur_id || null, quantite: qStock, facture_id: factureId, cout_unitaire: cout, note: fournisseur + ' n° ' + numero, utilisateur: state.nom, date_mvt: ($('fDate').value ? $('fDate').value + 'T12:00:00' : new Date().toISOString()) });
+          coutMaj.push({ id: l.produit.id, cout: cout });
+        }
+      });
+      if (lignesRows.length) { var lr = await sb.from('facture_lignes').insert(lignesRows); if (lr.error) throw new Error('Lignes : ' + lr.error.message); }
+      if (mvts.length) { var mr = await sb.from('mouvements').insert(mvts); if (mr.error) throw new Error('Mouvements : ' + mr.error.message); }
+      for (var c = 0; c < coutMaj.length; c++) { await sb.from('produits').update({ cout_unitaire: coutMaj[c].cout }).eq('id', coutMaj[c].id); }
+      await loadStock();
+      toast('Facture ' + fournisseur + ' n° ' + numero + ' enregistrée : ' + mvts.length + ' entrée' + (mvts.length > 1 ? 's' : '') + ' en stock ✓', 4000);
+      F = { lecture: null, lignes: [] }; $('factCard').classList.add('hidden');
+      loadFactures(); runQueue();
+    } catch (e) {
+      toast('Erreur : ' + (e.message || e), 6000);
+    }
+    $('fValider').disabled = false; $('fValider').textContent = 'Enregistrer la facture';
+  });
+
+  async function loadFactures() {
+    var r = await sb.from('factures').select('id,date_facture,fournisseur,numero,type_document,sous_total,frais_annexes,statut,valide_par,fichier_chemin,projets(nom)').order('date_facture', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+    if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
+    var TYPES = { stock: 'Stock', direct_projet: 'Direct projet', transformation: 'Transformation', service: 'Service', proforma: 'Pro-forma', bon_livraison: 'Bon de livraison', autre: 'Autre' };
+    $('fListe').innerHTML = r.data.map(function (f) {
+      return '<tr><td>' + esc(f.date_facture || '') + '</td><td>' + esc(f.fournisseur || '') + '</td><td>' + esc(f.numero || '') + '</td><td>' + esc(TYPES[f.type_document] || f.type_document || '') + '</td><td>' + esc((f.projets || {}).nom || '') + '</td><td class="num">' + (f.sous_total != null ? fmt(f.sous_total) + ' $' : '') + '</td><td>' + esc(f.valide_par || '') + '</td><td>' + (f.fichier_chemin ? '<button class="btn secondary small" data-pdf="' + esc(f.fichier_chemin) + '">PDF</button>' : '') + '</td></tr>';
+    }).join('') || '<tr><td colspan="8" class="muted">Aucune facture enregistrée.</td></tr>';
+  }
+  $('fRefresh').addEventListener('click', loadFactures);
+  $('fListe').addEventListener('click', async function (e) {
+    var b = e.target.closest('button[data-pdf]'); if (!b) return;
+    var r = await sb.storage.from('factures').createSignedUrl(b.dataset.pdf, 300);
+    if (r.error) { toast('PDF introuvable : ' + r.error.message, 4000); return; }
+    window.open(r.data.signedUrl, '_blank');
   });
 
   boot();
