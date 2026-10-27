@@ -339,7 +339,8 @@
   // propriétaire « courant » à une date : le dernier dont la date de début est passée (sans date = depuis toujours)
   function propCourant(dateStr) {
     var d = dateStr || today(); var liste = propsOrdre();
-    var ok = liste.filter(function (p) { return !p.date_debut || p.date_debut <= d; });
+    // le premier propriétaire n'a pas besoin de date ; les suivants ne commencent qu'à leur date de début
+    var ok = liste.filter(function (p, i) { return i === 0 ? true : (!!p.date_debut && p.date_debut <= d); });
     return ok.length ? ok[ok.length - 1] : liste[0];
   }
   function stockProp(pid, col, prid) { var m = state.stockProp[pid] || {}; var c = m[col] || {}; return Number(c[prid] || 0); }
