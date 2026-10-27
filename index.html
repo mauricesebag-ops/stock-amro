@@ -143,6 +143,7 @@
       <button data-view="projets">Projets</button>
       <button data-view="histo">Historique</button>
       <button data-view="factures" id="navFactures" class="hidden">Factures</button>
+      <button data-view="prop" id="navProp" class="hidden">Propriétaires</button>
     </nav>
   </header>
 
@@ -228,7 +229,7 @@
           <input id="histoSearch" class="grow" placeholder="Code, projet, note…" style="padding:10px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
           <button class="btn secondary small" id="histoRefresh">Actualiser</button>
         </div>
-        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Type</th><th>Profilé</th><th>Couleur</th><th class="num">Qté</th><th>Projet</th><th>Qui</th><th>Note</th><th></th></tr></thead><tbody id="histoBody"></tbody></table></div>
+        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Type</th><th>Produit</th><th>Couleur</th><th class="num">Qté</th><th>Projet</th><th>Propr.</th><th>Qui</th><th>Note</th><th></th></tr></thead><tbody id="histoBody"></tbody></table></div>
       </div>
     </section>
 
@@ -286,6 +287,27 @@
         <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Date</th><th>Fournisseur</th><th>N°</th><th>Type</th><th>Projet</th><th class="num">Sous-total</th><th>Par</th><th></th></tr></thead><tbody id="fListe"></tbody></table></div>
       </div>
     </section>
+
+    <!-- PROPRIÉTAIRES DU STOCK -->
+    <section id="view-prop" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">Inventaire par propriétaire</h2>
+          <div class="row"><button class="btn secondary small" id="propRefresh">Actualiser</button><button class="btn small" id="propExport">Exporter en Excel</button></div>
+        </div>
+        <p class="small muted" style="margin:10px 0 0">Chaque entrée en stock appartient à un propriétaire. Le stock de départ (décompte du 26 octobre 2026) et les achats jusqu'à la date de vente sont à M. Suissa ; à partir de la date de vente, les achats sont à M. Côté. Une sortie pige d'abord dans le stock de M. Suissa, puis dans celui de M. Côté. Un retour de chantier revient au propriétaire d'où le projet avait pris le matériel (le plus récent d'abord). La personne du magasin n'a rien à choisir.</p>
+        <div id="propParams" class="hidden" style="margin-top:14px"></div>
+      </div>
+      <div class="card"><h2>Résumé</h2><div id="propResume"></div></div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Utilisation de l'inventaire par projet</h2><select id="propProjFiltre" style="padding:8px;border:1px solid var(--line);border-radius:10px;min-height:40px"><option value="">Tous les propriétaires</option></select></div>
+        <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Projet</th><th>Propriétaire</th><th>Période</th><th>Produit</th><th>Couleur</th><th class="num">Qté utilisée</th><th class="num">kg</th><th class="num">Valeur</th></tr></thead><tbody id="propProjets"></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Stock détaillé par propriétaire</h2><label class="small muted"><input type="checkbox" id="propZero"> montrer les lignes à zéro</label></div>
+        <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Produit</th><th>Couleur</th><th>Propriétaire</th><th class="num">Entrées</th><th class="num">Sorties nettes</th><th class="num">Ajust.</th><th class="num">Restant</th><th class="num">kg restant</th><th class="num">Valeur restante</th></tr></thead><tbody id="propDetail"></tbody></table></div>
+      </div>
+    </section>
   </main>
 </div>
 <div id="toast"></div>
@@ -297,7 +319,7 @@
   var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9icnBpaXZodGV5Ymt5ZXRmb2xmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2OTQ1NTUsImV4cCI6MjEwODI3MDU1NX0.yPjDdm7-R8n-5fx4-ly-AuuJ-QSu-_t5xVM_--Kjj-4';
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  var state = { session:null, role:'magasin', nom:'', produits:[], familles:[], couleurs:[], projets:[], stock:{}, fam:'', mode:'sortie', prod:null, showAll:false, cart:[], view:'stock' };
+  var state = { session:null, role:'magasin', nom:'', produits:[], familles:[], couleurs:[], projets:[], proprietaires:[], stock:{}, stockProp:{}, fam:'', mode:'sortie', prod:null, showAll:false, cart:[], view:'stock' };
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
@@ -308,6 +330,40 @@
   function unitLabel(p, n) { if (p.unite === 'longueur') return (n === 1 ? 'longueur' : 'longueurs'); return p.unite; }
   function colorName(id) { var c = state.couleurs.filter(function (x) { return x.id === id; })[0]; return c ? c.nom : '—'; }
   function prodQty(pid) { var m = state.stock[pid] || {}; var t = 0; Object.keys(m).forEach(function (k) { t += Number(m[k]); }); return t; }
+  function today() { return new Date().toLocaleDateString('fr-CA'); } // AAAA-MM-JJ, heure locale
+
+  // ---------- Propriétaires du stock ----------
+  function propsOrdre() { return state.proprietaires.filter(function (p) { return p.actif; }).sort(function (a, b) { return a.ordre - b.ordre; }); }
+  function propById(id) { return state.proprietaires.filter(function (p) { return p.id === id; })[0]; }
+  function propNom(id) { var p = propById(id); return p ? p.nom : '—'; }
+  // propriétaire « courant » à une date : le dernier dont la date de début est passée (sans date = depuis toujours)
+  function propCourant(dateStr) {
+    var d = dateStr || today(); var liste = propsOrdre();
+    var ok = liste.filter(function (p) { return !p.date_debut || p.date_debut <= d; });
+    return ok.length ? ok[ok.length - 1] : liste[0];
+  }
+  function stockProp(pid, col, prid) { var m = state.stockProp[pid] || {}; var c = m[col] || {}; return Number(c[prid] || 0); }
+  // Sortie : on pige dans le stock de chaque propriétaire, dans l'ordre (Suissa puis Côté)
+  function repartirSortie(pid, col, qty) {
+    var rest = qty, out = [];
+    propsOrdre().forEach(function (pr) { if (rest <= 0) return; var dispo = stockProp(pid, col, pr.id); if (dispo > 0) { var q = Math.min(dispo, rest); out.push({ prid: pr.id, q: q }); rest -= q; } });
+    if (rest > 0) { var cur = propCourant(); var ex = out.filter(function (o) { return o.prid === cur.id; })[0]; if (ex) ex.q += rest; else out.push({ prid: cur.id, q: rest }); }
+    return out;
+  }
+  // Retour : revient au propriétaire d'où le projet avait pris ce produit (le plus récent d'abord), le surplus au propriétaire courant
+  function repartirRetour(pid, col, qty, conso) {
+    var rest = qty, out = []; var key = pid + '|' + col;
+    propsOrdre().slice().reverse().forEach(function (pr) { if (rest <= 0) return; var pris = Number((conso[key] || {})[pr.id] || 0); if (pris > 0) { var q = Math.min(pris, rest); out.push({ prid: pr.id, q: q }); rest -= q; } });
+    if (rest > 0) { var cur = propCourant(); var ex = out.filter(function (o) { return o.prid === cur.id; })[0]; if (ex) ex.q += rest; else out.push({ prid: cur.id, q: rest }); }
+    return out;
+  }
+  // Consommation nette d'un projet par produit / couleur / propriétaire (sorties − retours)
+  async function consoProjet(projetId) {
+    var r = await sb.from('mouvements').select('produit_id,couleur_id,proprietaire_id,quantite,type').eq('projet_id', projetId).in('type', ['sortie', 'retour']);
+    var conso = {};
+    (r.data || []).forEach(function (m) { var k = m.produit_id + '|' + m.couleur_id; conso[k] = conso[k] || {}; conso[k][m.proprietaire_id] = (conso[k][m.proprietaire_id] || 0) - Number(m.quantite); });
+    return conso;
+  }
 
   // ---------- Connexion ----------
   $('loginForm').addEventListener('submit', async function (e) {
@@ -330,6 +386,7 @@
     $('whoName').textContent = state.nom;
     $('login').classList.add('hidden'); $('app').classList.remove('hidden');
     $('navFactures').classList.toggle('hidden', !(state.role === 'admin' || state.role === 'factures'));
+    $('navProp').classList.toggle('hidden', !(state.role === 'admin' || state.role === 'factures'));
     await loadAll();
     renderStock();
   }
@@ -361,6 +418,8 @@
     state.familles = r1.data || []; state.couleurs = r2.data || []; state.produits = r3.data || []; state.projets = r4.data || [];
     var r5 = await sb.from('produit_alias').select('produit_id,fournisseur,alias');
     state.alias = r5.data || [];
+    var r6 = await sb.from('proprietaires').select('*').order('ordre');
+    state.proprietaires = r6.data || [];
     await loadStock();
     fillProjetSelect();
   }
@@ -370,6 +429,10 @@
     var m = {};
     r.data.forEach(function (x) { m[x.produit_id] = m[x.produit_id] || {}; m[x.produit_id][x.couleur_id] = Number(x.quantite); });
     state.stock = m;
+    var r2 = await sb.from('stock_par_proprietaire').select('produit_id,couleur_id,proprietaire_id,quantite');
+    var sp = {};
+    (r2.data || []).forEach(function (x) { sp[x.produit_id] = sp[x.produit_id] || {}; sp[x.produit_id][x.couleur_id] = sp[x.produit_id][x.couleur_id] || {}; sp[x.produit_id][x.couleur_id][x.proprietaire_id] = Number(x.quantite); });
+    state.stockProp = sp;
   }
   function fillProjetSelect() {
     var s = $('projetSelect'); s.innerHTML = '<option value="">— Choisir le projet —</option>';
@@ -384,8 +447,9 @@
   function showView(v) {
     state.view = v;
     Array.prototype.forEach.call($('nav').querySelectorAll('button'), function (b) { b.classList.toggle('active', b.dataset.view === v); });
-    ['stock', 'mvt', 'projets', 'histo', 'factures'].forEach(function (k) { $('view-' + k).classList.toggle('hidden', !(k === v || (v === 'ajust' && k === 'mvt'))); });
+    ['stock', 'mvt', 'projets', 'histo', 'factures', 'prop'].forEach(function (k) { $('view-' + k).classList.toggle('hidden', !(k === v || (v === 'ajust' && k === 'mvt'))); });
     if (v === 'factures') loadFactures();
+    if (v === 'prop') loadProp();
     if (v === 'stock') renderStock();
     if (v === 'mvt') { if (state.mode === 'ajustement') setMode('sortie'); else setMode(state.mode); renderMvtResults(); }
     if (v === 'ajust') { setMode('ajustement'); renderMvtResults(); }
@@ -523,18 +587,29 @@
     if (!state.cart.length) return;
     var projet = $('projetSelect').value; var note = $('mvtNote').value.trim();
     if (state.mode !== 'ajustement' && !projet) { toast('Choisis le projet avant de valider', 3000); $('projetSelect').focus(); return; }
-    var rows = state.cart.map(function (l) {
-      var q = state.mode === 'sortie' ? -l.qty : state.mode === 'retour' ? l.qty : (l.qty - l.cur);
-      return { type: state.mode, produit_id: l.produit_id, couleur_id: l.couleur_id, quantite: q, projet_id: state.mode === 'ajustement' ? null : projet, quantite_comptee: state.mode === 'ajustement' ? l.qty : null, note: note || null, utilisateur: state.nom };
-    }).filter(function (r) { return state.mode !== 'ajustement' || r.quantite !== 0; });
-    if (!rows.length) { toast('Rien à enregistrer : les quantités comptées sont égales au stock'); state.cart = []; renderCart(); return; }
     $('cartValidate').disabled = true;
+    // Répartition par propriétaire du stock (Suissa puis Côté) — invisible pour la personne du magasin
+    var conso = state.mode === 'retour' ? await consoProjet(projet) : null;
+    var rows = [];
+    state.cart.forEach(function (l) {
+      var base = { type: state.mode, produit_id: l.produit_id, couleur_id: l.couleur_id, projet_id: state.mode === 'ajustement' ? null : projet, quantite_comptee: state.mode === 'ajustement' ? l.qty : null, note: note || null, utilisateur: state.nom };
+      var parts;
+      if (state.mode === 'sortie') parts = repartirSortie(l.produit_id, l.couleur_id, l.qty).map(function (p) { return { prid: p.prid, q: -p.q }; });
+      else if (state.mode === 'retour') parts = repartirRetour(l.produit_id, l.couleur_id, l.qty, conso);
+      else {
+        var diff = l.qty - l.cur; if (diff === 0) return;
+        parts = diff < 0 ? repartirSortie(l.produit_id, l.couleur_id, -diff).map(function (p) { return { prid: p.prid, q: -p.q }; }) : [{ prid: propCourant().id, q: diff }];
+      }
+      parts.forEach(function (p) { if (p.q !== 0) rows.push(Object.assign({}, base, { quantite: p.q, proprietaire_id: p.prid })); });
+    });
+    if (!rows.length) { $('cartValidate').disabled = false; toast('Rien à enregistrer : les quantités comptées sont égales au stock'); state.cart = []; renderCart(); return; }
     var r = await sb.from('mouvements').insert(rows);
     $('cartValidate').disabled = false;
     if (r.error) { toast('Erreur : ' + r.error.message, 5000); return; }
+    var n = state.cart.length;
     state.cart = []; renderCart(); $('mvtNote').value = '';
     await loadStock();
-    toast(rows.length + ' mouvement' + (rows.length > 1 ? 's' : '') + ' enregistré' + (rows.length > 1 ? 's' : '') + ' ✓', 3000);
+    toast(n + ' ligne' + (n > 1 ? 's' : '') + ' enregistrée' + (n > 1 ? 's' : '') + ' ✓', 3000);
   });
 
   // ---------- Projets ----------
@@ -559,7 +634,7 @@
 
   // ---------- Historique ----------
   async function loadHisto() {
-    var q = sb.from('mouvements').select('id,date_mvt,type,quantite,quantite_comptee,note,utilisateur,produits(code),couleurs(nom),projets(nom)').order('date_mvt', { ascending: false }).limit(200);
+    var q = sb.from('mouvements').select('id,date_mvt,type,quantite,quantite_comptee,note,utilisateur,produits(code),couleurs(nom),projets(nom),proprietaires(nom)').order('date_mvt', { ascending: false }).limit(200);
     var t = $('histoType').value; if (t) q = q.eq('type', t);
     var r = await q; if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
     var s = norm($('histoSearch').value);
@@ -568,8 +643,8 @@
       var d = new Date(m.date_mvt); var ds = d.toLocaleDateString('fr-CA') + ' ' + d.toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' });
       var del = state.role === 'admin' ? '<button class="btn danger small" data-del="' + m.id + '">✕</button>' : '';
       var q = Number(m.quantite); var qs = (q > 0 ? '+' : '') + fmt(q) + (m.type === 'ajustement' ? ' <span class="muted">(compté ' + fmt(m.quantite_comptee) + ')</span>' : '');
-      return '<tr><td>' + ds + '</td><td><span class="tag ' + esc(m.type) + '">' + esc(m.type) + '</span></td><td>' + esc((m.produits || {}).code) + '</td><td>' + esc((m.couleurs || {}).nom) + '</td><td class="num">' + qs + '</td><td>' + esc((m.projets || {}).nom || '') + '</td><td>' + esc(m.utilisateur || '') + '</td><td>' + esc(m.note || '') + '</td><td>' + del + '</td></tr>';
-    }).join('') || '<tr><td colspan="9" class="muted">Aucun mouvement.</td></tr>';
+      return '<tr><td>' + ds + '</td><td><span class="tag ' + esc(m.type) + '">' + esc(m.type) + '</span></td><td>' + esc((m.produits || {}).code) + '</td><td>' + esc((m.couleurs || {}).nom) + '</td><td class="num">' + qs + '</td><td>' + esc((m.projets || {}).nom || '') + '</td><td class="small muted">' + esc(((m.proprietaires || {}).nom || '').replace('M. ', '')) + '</td><td>' + esc(m.utilisateur || '') + '</td><td>' + esc(m.note || '') + '</td><td>' + del + '</td></tr>';
+    }).join('') || '<tr><td colspan="10" class="muted">Aucun mouvement.</td></tr>';
   }
   $('histoRefresh').addEventListener('click', loadHisto);
   $('histoType').addEventListener('change', loadHisto);
@@ -580,6 +655,113 @@
     var r = await sb.from('mouvements').delete().eq('id', b.dataset.del);
     if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
     await loadStock(); loadHisto(); toast('Mouvement supprimé');
+  });
+
+  // ---------- Inventaire par propriétaire ----------
+  var P = { rows: [], resume: [], detail: [], projets: [] };
+  function money(n) { return Number(n || 0).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }); }
+  function dateVente() { var l = propsOrdre(); var d = null; l.forEach(function (p) { if (p.date_debut && (!d || p.date_debut > d)) d = p.date_debut; }); return d; }
+  function periode(dateMvt) { var dv = dateVente(); if (!dv) return '—'; return (new Date(dateMvt).toLocaleDateString('fr-CA') < dv) ? 'avant la vente' : 'après la vente'; }
+  function renderPropParams() {
+    var box = $('propParams');
+    if (state.role !== 'admin') { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    var html = '<div class="row" style="align-items:flex-end;gap:14px">';
+    propsOrdre().forEach(function (p) {
+      html += '<div class="field" style="margin:0;min-width:200px"><label>Propriétaire ' + p.ordre + ' — nom</label><input data-prop="nom" data-id="' + p.id + '" value="' + esc(p.nom) + '"></div>';
+      html += '<div class="field" style="margin:0"><label>' + (p.ordre === 1 ? 'Depuis le début' : 'Ses achats commencent le (date de vente)') + '</label><input type="date" data-prop="date_debut" data-id="' + p.id + '" value="' + esc(p.date_debut || '') + '"' + (p.ordre === 1 ? ' disabled' : '') + '></div>';
+    });
+    html += '</div><div class="row" style="align-items:flex-end;gap:14px;margin-top:10px">';
+    state.familles.forEach(function (f) { if (f.code !== 'CS' && f.code !== 'ISO') return; html += '<div class="field" style="margin:0"><label>Coût au kg — ' + esc(f.nom) + ' ($/kg, pour valoriser le stock de départ)</label><input type="number" step="0.01" data-fam="' + f.id + '" value="' + (f.cout_kg == null ? '' : f.cout_kg) + '" placeholder="ex. 12.50"></div>'; });
+    html += '<button class="btn small" id="propSave">Enregistrer les paramètres</button></div>';
+    html += '<div class="small muted" style="margin-top:6px">' + (dateVente() ? 'Date de vente enregistrée : ' + dateVente() + '. Les factures datées à partir de ce jour entrent au nom de ' + esc(propCourant(dateVente()).nom) + '.' : 'Aucune date de vente enregistrée : tout entre encore au nom de ' + esc(propCourant().nom) + '.') + '</div>';
+    box.innerHTML = html;
+  }
+  $('propParams').addEventListener('click', async function (e) {
+    if (!e.target.closest('#propSave')) return;
+    e.target.disabled = true;
+    try {
+      var inputs = $('propParams').querySelectorAll('input[data-prop]'); var byId = {};
+      Array.prototype.forEach.call(inputs, function (i) { byId[i.dataset.id] = byId[i.dataset.id] || {}; if (!i.disabled) byId[i.dataset.id][i.dataset.prop] = i.value.trim() || null; });
+      for (var id in byId) { var u = await sb.from('proprietaires').update(byId[id]).eq('id', Number(id)); if (u.error) throw new Error(u.error.message); }
+      var fams = $('propParams').querySelectorAll('input[data-fam]');
+      for (var k = 0; k < fams.length; k++) { var v = fams[k].value === '' ? null : Number(fams[k].value); var uf = await sb.from('familles').update({ cout_kg: v }).eq('id', Number(fams[k].dataset.fam)); if (uf.error) throw new Error(uf.error.message); }
+      var r6 = await sb.from('proprietaires').select('*').order('ordre'); state.proprietaires = r6.data || state.proprietaires;
+      var r1 = await sb.from('familles').select('*').order('ordre'); state.familles = r1.data || state.familles;
+      toast('Paramètres enregistrés ✓'); loadProp();
+    } catch (err) { toast('Erreur : ' + err.message, 5000); e.target.disabled = false; }
+  });
+  async function loadProp() {
+    renderPropParams();
+    var r = await sb.from('mouvements_valorises').select('id,date_mvt,type,quantite,proprietaire_id,proprietaire_nom,produit_id,code,description,unite,famille,famille_nom,couleur_id,couleur,projet_id,projet,kg,cout_unitaire_estime').order('date_mvt');
+    if (r.error) { toast('Erreur : ' + r.error.message, 5000); return; }
+    P.rows = r.data || [];
+    var sel = $('propProjFiltre'); var cur = sel.value; sel.innerHTML = '<option value="">Tous les propriétaires</option>' + propsOrdre().map(function (p) { return '<option value="' + p.id + '">' + esc(p.nom) + '</option>'; }).join(''); sel.value = cur;
+    renderProp();
+  }
+  function calcProp() {
+    var det = {}, res = {}, proj = {};
+    P.rows.forEach(function (m) {
+      var q = Number(m.quantite); var cout = m.cout_unitaire_estime == null ? null : Number(m.cout_unitaire_estime); var val = cout == null ? 0 : q * cout;
+      var kgU = (m.kg != null && q !== 0) ? Number(m.kg) / q : null;
+      var dk = m.produit_id + '|' + m.couleur_id + '|' + m.proprietaire_id;
+      var d = det[dk] = det[dk] || { code: m.code, description: m.description, unite: m.unite, famille: m.famille_nom, couleur: m.couleur || '', prid: m.proprietaire_id, prop: m.proprietaire_nom, entrees: 0, sorties: 0, ajust: 0, restant: 0, valeur: 0, sansCout: false, kgU: kgU };
+      if (kgU != null) d.kgU = kgU;
+      if (m.type === 'ouverture' || m.type === 'entree') d.entrees += q; else if (m.type === 'sortie' || m.type === 'retour') d.sorties += q; else d.ajust += q;
+      d.restant += q; d.valeur += val; if (cout == null && q !== 0) d.sansCout = true;
+      var rr = res[m.proprietaire_id] = res[m.proprietaire_id] || { prid: m.proprietaire_id, prop: m.proprietaire_nom, produits: {}, longueurs: 0, autres: 0, kg: 0, valeur: 0, utiliseQ: 0, utiliseVal: 0, sansCout: 0 };
+      if (m.unite === 'longueur') rr.longueurs += q; else rr.autres += q;
+      if (m.kg != null) rr.kg += Number(m.kg); rr.valeur += val; if (cout == null && q !== 0) rr.sansCout++;
+      if (q !== 0) rr.produits[m.produit_id] = true;
+      if ((m.type === 'sortie' || m.type === 'retour') && m.projet_id) {
+        rr.utiliseQ -= q; rr.utiliseVal -= val;
+        var per = periode(m.date_mvt);
+        var pk = m.projet_id + '|' + m.proprietaire_id + '|' + per + '|' + m.produit_id + '|' + m.couleur_id;
+        var p = proj[pk] = proj[pk] || { projet: m.projet, prid: m.proprietaire_id, prop: m.proprietaire_nom, periode: per, code: m.code, description: m.description, unite: m.unite, couleur: m.couleur || '', qte: 0, kg: 0, valeur: 0, sansCout: false };
+        p.qte -= q; if (m.kg != null) p.kg -= Number(m.kg); p.valeur -= val; if (cout == null) p.sansCout = true;
+      }
+    });
+    P.detail = Object.keys(det).map(function (k) { return det[k]; }).sort(function (a, b) { return a.code.localeCompare(b.code) || a.couleur.localeCompare(b.couleur) || a.prid - b.prid; });
+    P.resume = Object.keys(res).map(function (k) { var x = res[k]; x.nbProduits = Object.keys(x.produits).length; return x; }).sort(function (a, b) { return a.prid - b.prid; });
+    P.projets = Object.keys(proj).map(function (k) { return proj[k]; }).filter(function (p) { return Math.abs(p.qte) > 1e-9; }).sort(function (a, b) { return a.projet.localeCompare(b.projet) || a.prid - b.prid || a.periode.localeCompare(b.periode) || a.code.localeCompare(b.code); });
+  }
+  function renderProp() {
+    calcProp();
+    var dv = dateVente();
+    $('propResume').innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Propriétaire</th><th class="num">Produits</th><th class="num">Longueurs</th><th class="num">Autres unités</th><th class="num">kg (profilés)</th><th class="num">Valeur du stock</th><th class="num">Utilisé sur projets</th></tr></thead><tbody>' +
+      (P.resume.map(function (r) { return '<tr><td><strong>' + esc(r.prop) + '</strong></td><td class="num">' + r.nbProduits + '</td><td class="num">' + fmt(r.longueurs) + '</td><td class="num">' + fmt(r.autres) + '</td><td class="num">' + fmt(Math.round(r.kg)) + '</td><td class="num">' + money(r.valeur) + (r.sansCout ? ' <span class="muted" title="Des mouvements n’ont pas de coût connu">*</span>' : '') + '</td><td class="num">' + fmt(r.utiliseQ) + ' <span class="muted small">(' + money(r.utiliseVal) + ')</span></td></tr>'; }).join('') || '<tr><td colspan="7" class="muted">Aucun mouvement.</td></tr>') +
+      '</tbody></table></div><div class="small muted" style="margin-top:8px">' + (dv ? 'Date de vente : ' + dv + '.' : 'Date de vente non fixée.') + ' * valeur incomplète : le stock de départ des profilés n’a pas de coût tant que le coût au kg n’est pas renseigné (paramètres ci-dessus, admin).</div>';
+    var filt = $('propProjFiltre').value ? Number($('propProjFiltre').value) : null;
+    var pj = P.projets.filter(function (p) { return !filt || p.prid === filt; });
+    var totQ = 0, totV = 0;
+    $('propProjets').innerHTML = pj.map(function (p) { totQ += p.qte; totV += p.valeur; return '<tr><td>' + esc(p.projet) + '</td><td>' + esc(p.prop) + '</td><td class="small">' + esc(p.periode) + '</td><td><strong>' + esc(p.code) + '</strong> <span class="muted small">' + esc(p.description || '') + '</span></td><td>' + esc(p.couleur) + '</td><td class="num">' + fmt(p.qte) + ' <span class="muted small">' + esc(p.unite) + '</span></td><td class="num">' + (p.kg ? fmt(Math.round(p.kg)) : '') + '</td><td class="num">' + (p.sansCout && !p.valeur ? '<span class="muted">—</span>' : money(p.valeur)) + '</td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">Aucune sortie sur projet pour l’instant.</td></tr>';
+    if (pj.length) $('propProjets').innerHTML += '<tr><td colspan="5"><strong>Total</strong></td><td class="num"><strong>' + fmt(totQ) + '</strong></td><td></td><td class="num"><strong>' + money(totV) + '</strong></td></tr>';
+    var zero = $('propZero').checked;
+    var det = P.detail.filter(function (d) { return zero || Math.abs(d.restant) > 1e-9 || Math.abs(d.sorties) > 1e-9; });
+    $('propDetail').innerHTML = det.map(function (d) { var kgR = d.kgU != null ? d.restant * d.kgU : null; return '<tr><td><strong>' + esc(d.code) + '</strong> <span class="muted small">' + esc(d.description || '') + '</span></td><td>' + esc(d.couleur) + '</td><td>' + esc(d.prop) + '</td><td class="num">' + fmt(d.entrees) + '</td><td class="num">' + fmt(d.sorties) + '</td><td class="num">' + (d.ajust ? fmt(d.ajust) : '') + '</td><td class="num"><strong>' + fmt(d.restant) + '</strong></td><td class="num">' + (kgR != null ? fmt(Math.round(kgR)) : '') + '</td><td class="num">' + (d.sansCout && !d.valeur ? '<span class="muted">—</span>' : money(d.valeur)) + '</td></tr>'; }).join('') || '<tr><td colspan="9" class="muted">Rien à afficher.</td></tr>';
+  }
+  $('propRefresh').addEventListener('click', loadProp);
+  $('propProjFiltre').addEventListener('change', renderProp);
+  $('propZero').addEventListener('change', renderProp);
+  function loadScript(src) { return new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = function () { ko(new Error('Chargement impossible : ' + src)); }; document.head.appendChild(s); }); }
+  $('propExport').addEventListener('click', async function () {
+    var b = $('propExport'); b.disabled = true; b.textContent = 'Préparation…';
+    try {
+      if (!window.XLSX) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+      if (!P.rows.length) await loadProp(); else calcProp();
+      var wb = XLSX.utils.book_new();
+      var r1 = [['Propriétaire', 'Produits', 'Longueurs', 'Autres unités', 'kg (profilés)', 'Valeur du stock ($)', 'Utilisé sur projets (qté)', 'Utilisé sur projets ($)']].concat(P.resume.map(function (r) { return [r.prop, r.nbProduits, r.longueurs, r.autres, Math.round(r.kg), Math.round(r.valeur * 100) / 100, r.utiliseQ, Math.round(r.utiliseVal * 100) / 100]; }));
+      r1.push([]); r1.push(['Date de vente', dateVente() || 'non fixée']); r1.push(['Exporté le', new Date().toLocaleString('fr-CA')]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r1), 'Résumé');
+      var r2 = [['Projet', 'Propriétaire', 'Période', 'Code', 'Description', 'Couleur', 'Qté utilisée', 'Unité', 'kg', 'Valeur ($)']].concat(P.projets.map(function (p) { return [p.projet, p.prop, p.periode, p.code, p.description, p.couleur, p.qte, p.unite, p.kg ? Math.round(p.kg * 10) / 10 : null, Math.round(p.valeur * 100) / 100]; }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r2), 'Utilisation par projet');
+      var r3 = [['Code', 'Description', 'Famille', 'Couleur', 'Propriétaire', 'Unité', 'Entrées', 'Sorties nettes', 'Ajustements', 'Restant', 'kg restant', 'Valeur restante ($)']].concat(P.detail.map(function (d) { return [d.code, d.description, d.famille, d.couleur, d.prop, d.unite, d.entrees, d.sorties, d.ajust, d.restant, d.kgU != null ? Math.round(d.restant * d.kgU * 10) / 10 : null, Math.round(d.valeur * 100) / 100]; }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r3), 'Stock par propriétaire');
+      var r4 = [['Date', 'Type', 'Code', 'Description', 'Couleur', 'Propriétaire', 'Projet', 'Quantité', 'Unité', 'kg', 'Coût unitaire ($)', 'Valeur ($)']].concat(P.rows.map(function (m) { var c = m.cout_unitaire_estime == null ? null : Number(m.cout_unitaire_estime); return [new Date(m.date_mvt).toLocaleString('fr-CA'), m.type, m.code, m.description, m.couleur || '', m.proprietaire_nom, m.projet || '', Number(m.quantite), m.unite, m.kg != null ? Math.round(Number(m.kg) * 10) / 10 : null, c, c == null ? null : Math.round(Number(m.quantite) * c * 100) / 100]; }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r4), 'Mouvements');
+      XLSX.writeFile(wb, 'Inventaire_par_proprietaire_' + today() + '.xlsx');
+    } catch (e) { toast('Export impossible : ' + e.message, 5000); }
+    b.disabled = false; b.textContent = 'Exporter en Excel';
   });
 
   // ---------- Factures ----------
@@ -841,7 +1023,7 @@
         var colId = (isAct && l.produit && l.produit.suivi_couleur) ? (l.couleur_id || null) : null;
         lignesRows.push({ facture_id: factureId, no_ligne: l.src.no_ligne, code_fournisseur: l.src.code, description: l.src.description, quantite: l.src.quantite, unite_facture: l.src.unite, prix_unitaire: l.src.prix_unitaire, montant: montant, produit_id: isAct && l.produit ? l.produit.id : null, quantite_stock: qStock, couleur_id: colId, cout_unitaire_stock: cout, traitement: l.traitement });
         if (l.traitement === 'stock' && l.produit && qStock > 0) {
-          mvts.push({ type: 'entree', produit_id: l.produit.id, couleur_id: colId, quantite: qStock, facture_id: factureId, cout_unitaire: cout, note: fournisseur + ' n° ' + numero, utilisateur: state.nom, date_mvt: ($('fDate').value ? $('fDate').value + 'T12:00:00' : new Date().toISOString()) });
+          mvts.push({ type: 'entree', proprietaire_id: propCourant($('fDate').value || undefined).id, produit_id: l.produit.id, couleur_id: colId, quantite: qStock, facture_id: factureId, cout_unitaire: cout, note: fournisseur + ' n° ' + numero, utilisateur: state.nom, date_mvt: ($('fDate').value ? $('fDate').value + 'T12:00:00' : new Date().toISOString()) });
           coutMaj.push({ id: l.produit.id, cout: cout });
         }
       });
