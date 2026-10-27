@@ -134,7 +134,7 @@
   <header>
     <div class="bar">
       <div class="brand">Stock <span>Amro</span></div>
-      <div class="who"><span id="whoName"></span><button class="btn secondary small" id="logoutBtn">Quitter</button></div>
+      <div class="who"><span id="whoName"></span><button class="btn secondary small" id="pwdBtn" title="Changer mon mot de passe">Mot de passe</button><button class="btn secondary small" id="logoutBtn">Quitter</button></div>
     </div>
     <nav id="nav">
       <button data-view="stock" class="active">Stock</button>
@@ -149,6 +149,16 @@
 
   <main>
     <div id="diag" class="card hidden" style="border-color:#FCA5A5;background:#FEF2F2"></div>
+    <!-- CHANGER MON MOT DE PASSE -->
+    <div id="pwdCard" class="card hidden">
+      <h2>Changer mon mot de passe</h2>
+      <div class="grid2">
+        <div class="field"><label>Nouveau mot de passe (10 caractères ou plus)</label><input id="pwd1" type="password" autocomplete="new-password"></div>
+        <div class="field"><label>Répète-le</label><input id="pwd2" type="password" autocomplete="new-password"></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn secondary small" id="pwdCancel">Annuler</button><button class="btn" id="pwdSave">Enregistrer le nouveau mot de passe</button></div>
+      <div class="error" id="pwdError"></div>
+    </div>
     <!-- STOCK -->
     <section id="view-stock">
       <div class="card">
@@ -375,6 +385,19 @@
     start(r.data.session);
   });
   $('logoutBtn').addEventListener('click', async function () { await sb.auth.signOut(); location.reload(); });
+  // Changer mon mot de passe (l'utilisateur connecté change le sien ; aucune clé serveur nécessaire)
+  $('pwdBtn').addEventListener('click', function () { $('pwdCard').classList.remove('hidden'); $('pwd1').value = ''; $('pwd2').value = ''; $('pwdError').textContent = ''; window.scrollTo(0, 0); $('pwd1').focus(); });
+  $('pwdCancel').addEventListener('click', function () { $('pwdCard').classList.add('hidden'); });
+  $('pwdSave').addEventListener('click', async function () {
+    var a = $('pwd1').value, b = $('pwd2').value; $('pwdError').textContent = '';
+    if (a.length < 10) { $('pwdError').textContent = 'Choisis au moins 10 caractères.'; return; }
+    if (a !== b) { $('pwdError').textContent = 'Les deux saisies ne sont pas identiques.'; return; }
+    $('pwdSave').disabled = true;
+    var r = await sb.auth.updateUser({ password: a });
+    $('pwdSave').disabled = false;
+    if (r.error) { $('pwdError').textContent = 'Impossible : ' + r.error.message; return; }
+    $('pwdCard').classList.add('hidden'); toast('Mot de passe changé ✓', 3000);
+  });
 
   async function boot() {
     var r = await sb.auth.getSession();
