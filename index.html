@@ -341,6 +341,7 @@
   function colorName(id) { var c = state.couleurs.filter(function (x) { return x.id === id; })[0]; return c ? c.nom : '—'; }
   function prodQty(pid) { var m = state.stock[pid] || {}; var t = 0; Object.keys(m).forEach(function (k) { t += Number(m[k]); }); return t; }
   function today() { return new Date().toLocaleDateString('fr-CA'); } // AAAA-MM-JJ, heure locale
+  var DATE_DEPART = '2026-10-26'; // décompte physique de départ : les factures antérieures ne créent pas de quantités
 
   // ---------- Propriétaires du stock ----------
   function propsOrdre() { return state.proprietaires.filter(function (p) { return p.actif; }).sort(function (a, b) { return a.ordre - b.ordre; }); }
@@ -888,6 +889,7 @@
     if (L.type_document === 'service') notices.push('<div class="notice info">Facture de <strong>service</strong> : rien n’entre en stock ; le montant sera attribué au coût du projet choisi.</div>');
     if (L.type_document === 'direct_projet') notices.push('<div class="notice info"><strong>Achat direct pour un projet</strong> : les articles ne passent pas par le stock ; leur coût est attribué au projet.</div>');
     if (L.type_document === 'transformation') notices.push('<div class="notice warn"><strong>Transformation</strong> (peinture, anodisation, soudure) : le coût est enregistré sur la facture et le projet ; le changement de couleur des profilés se fera par un ajustement dans une version suivante.</div>');
+    if (L.date && L.date < DATE_DEPART) notices.push('<div class="notice warn">Facture datée du <strong>' + esc(L.date) + '</strong>, avant le décompte de départ du ' + DATE_DEPART + ' : elle sert au <strong>catalogue et aux coûts</strong> (produits créés, coût unitaire mis à jour, coûts de projet) mais <strong>n’ajoute aucune quantité au stock</strong>, car ce matériel est déjà compté ou déjà utilisé.</div>');
     if (L.adresse_livraison_differente) notices.push('<div class="notice warn">L’adresse de livraison n’est pas celle d’Amro : le matériel est-il passé par le magasin ?</div>');
     if (L.type_justification) notices.push('<div class="small muted" style="margin-top:6px">Lecture : ' + esc(L.type_justification) + '</div>');
     if (L.remarques) notices.push('<div class="small muted">Remarques de la lecture : ' + esc(L.remarques) + '</div>');
@@ -1037,6 +1039,7 @@
       }
       // 4. lignes + mouvements
       var lignesRows = []; var mvts = []; var coutMaj = [];
+      var avantDepart = !!$('fDate').value && $('fDate').value < DATE_DEPART; // facture antérieure au décompte : coûts seulement
       F.lignes.forEach(function (l) {
         var montant = Number(l.src.montant || 0);
         var isAct = l.traitement === 'stock' || l.traitement === 'direct_projet' || l.traitement === 'transformation';
@@ -1046,7 +1049,8 @@
         // la couleur n'est conservée que pour les produits suivis par couleur (profilés)
         var colId = (isAct && l.produit && l.produit.suivi_couleur) ? (l.couleur_id || null) : null;
         lignesRows.push({ facture_id: factureId, no_ligne: l.src.no_ligne, code_fournisseur: l.src.code, description: l.src.description, quantite: l.src.quantite, unite_facture: l.src.unite, prix_unitaire: l.src.prix_unitaire, montant: montant, produit_id: isAct && l.produit ? l.produit.id : null, quantite_stock: qStock, couleur_id: colId, cout_unitaire_stock: cout, traitement: l.traitement });
-        if (l.traitement === 'stock' && l.produit && qStock > 0) {
+        if (l.traitement === 'stock' && l.produit && qStock > 0 && avantDepart) { coutMaj.push({ id: l.produit.id, cout: cout }); }
+        else if (l.traitement === 'stock' && l.produit && qStock > 0) {
           mvts.push({ type: 'entree', proprietaire_id: propCourant($('fDate').value || undefined).id, produit_id: l.produit.id, couleur_id: colId, quantite: qStock, facture_id: factureId, cout_unitaire: cout, note: fournisseur + ' n° ' + numero, utilisateur: state.nom, date_mvt: ($('fDate').value ? $('fDate').value + 'T12:00:00' : new Date().toISOString()) });
           coutMaj.push({ id: l.produit.id, cout: cout });
         }
@@ -1055,7 +1059,7 @@
       if (mvts.length) { var mr = await sb.from('mouvements').insert(mvts); if (mr.error) throw new Error('Mouvements : ' + mr.error.message); }
       for (var c = 0; c < coutMaj.length; c++) { await sb.from('produits').update({ cout_unitaire: coutMaj[c].cout }).eq('id', coutMaj[c].id); }
       await loadStock();
-      toast('Facture ' + fournisseur + ' n° ' + numero + ' enregistrée : ' + mvts.length + ' entrée' + (mvts.length > 1 ? 's' : '') + ' en stock ✓', 4000);
+      toast('Facture ' + fournisseur + ' n° ' + numero + ' enregistrée : ' + (avantDepart ? 'catalogue et coûts mis à jour, aucune quantité (antérieure au décompte du ' + DATE_DEPART + ')' : mvts.length + ' entrée' + (mvts.length > 1 ? 's' : '') + ' en stock') + ' ✓', 5000);
       F = { lecture: null, lignes: [] }; $('factCard').classList.add('hidden');
       loadFactures(); runQueue();
     } catch (e) {
