@@ -504,17 +504,27 @@
     famChips();
     var q = $('stockSearch').value;
     var list = filterProduits(q, state.fam);
-    var totalQ = 0, totalAutres = 0, totalKg = 0;
+    var totalQ = 0, totalAutres = 0, totalKg = 0, nbLong = 0, nbACompter = 0;
     var html = list.map(function (p) {
-      var m = state.stock[p.id] || {}; var t = prodQty(p.id); if (p.unite === 'longueur') totalQ += t; else totalAutres += t;
+      var m = state.stock[p.id] || {}; var t = prodQty(p.id); if (p.unite === 'longueur') { totalQ += t; nbLong++; } else totalAutres += t;
       var kg = (p.kg_m && p.longueur_m) ? t * p.kg_m * p.longueur_m : 0; totalKg += kg;
       var cols = !p.suivi_couleur ? '' : Object.keys(m).filter(function (k) { return Number(m[k]) !== 0; }).map(function (k) { return '<span class="pill">' + esc(colorName(Number(k))) + ' ' + fmt(m[k]) + '</span>'; }).join('');
+      // article hors profilés jamais compté ni entré : « à compter » plutôt qu'un 0 trompeur
+      var aCompter = !p.suivi_couleur && !state.stock[p.id]; if (aCompter) nbACompter++;
+      var qtyHtml = aCompter
+        ? '<div class="n" style="font-size:16px;color:var(--warn)">à compter</div><div class="u">' + (p.cout_unitaire != null ? 'coût ' + Number(p.cout_unitaire).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' }) + ' / ' + esc(p.unite) : esc(p.unite)) + '</div>'
+        : '<div class="n">' + fmt(t) + '</div><div class="u">' + unitLabel(p, t) + (kg ? ' · ' + fmt(Math.round(kg)) + ' kg' : '') + '</div>';
       return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) +
         '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div><div class="colors">' + cols + '</div></div>' +
-        '<div class="qty"><div class="n">' + fmt(t) + '</div><div class="u">' + unitLabel(p, t) + (kg ? ' · ' + fmt(Math.round(kg)) + ' kg' : '') + '</div></div></button>';
+        '<div class="qty">' + qtyHtml + '</div></button>';
     }).join('');
     $('stockList').innerHTML = html || '<div class="muted">Aucun produit.</div>';
-    $('stockSummary').textContent = list.length + ' produits · ' + fmt(totalQ) + ' longueurs' + (totalAutres ? ' · ' + fmt(totalAutres) + ' autres unités' : '') + ' · ' + fmt(Math.round(totalKg)) + ' kg (poids théorique des profilés)';
+    var parts = [list.length + ' produit' + (list.length > 1 ? 's' : '')];
+    if (nbLong) parts.push(fmt(totalQ) + ' longueurs');
+    if (totalAutres) parts.push(fmt(totalAutres) + ' autres unités');
+    if (totalKg) parts.push(fmt(Math.round(totalKg)) + ' kg (poids théorique des profilés)');
+    if (nbACompter) parts.push(nbACompter + ' à compter (pas encore de quantité : faire un Ajustement)');
+    $('stockSummary').textContent = parts.join(' · ');
   }
   $('stockSearch').addEventListener('input', renderStock);
   $('stockList').addEventListener('click', function (e) {
@@ -587,6 +597,7 @@
       var v = Number(inp.value); if (isNaN(v) || v < 0) { errors.push('Quantité invalide'); return; }
       var col = inp.dataset.col ? Number(inp.dataset.col) : null;
       var cur = col === null ? prodQty(p.id) : Number(m[col] || 0);
+      if (state.mode === 'sortie' && col === null && !state.stock[p.id]) { errors.push(p.code + ' n’a pas encore été compté : fais d’abord un Ajustement avec la quantité réelle sur l’étagère'); return; }
       if (state.mode === 'sortie' && v > cur) { errors.push(p.code + (col === null ? '' : ' ' + colorName(col)) + ' : seulement ' + fmt(cur) + ' en stock'); return; }
       if (state.mode !== 'ajustement' && v === 0) return;
       state.cart = state.cart.filter(function (l) { return !(l.produit_id === p.id && l.couleur_id === col); });
