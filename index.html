@@ -159,11 +159,29 @@
       <div class="row" style="margin-top:12px"><button class="btn secondary small" id="pwdCancel">Annuler</button><button class="btn" id="pwdSave">Enregistrer le nouveau mot de passe</button></div>
       <div class="error" id="pwdError"></div>
     </div>
+    <!-- NOUVEL ARTICLE -->
+    <div id="newArtCard" class="card hidden" style="border-color:var(--accent)">
+      <h2>Nouvel article</h2>
+      <p class="small muted" style="margin:-6px 0 12px">Pour un article qui est sur l'étagère mais pas encore dans la liste. Vérifie d'abord les articles qui ressemblent : s'il existe déjà, choisis-le plutôt que d'en créer un deuxième.</p>
+      <div class="grid2">
+        <div class="field"><label>Code (celui inscrit sur la boîte ou l'étiquette)</label><input id="naCode" autocomplete="off" placeholder="ex. 4551-304"></div>
+        <div class="field"><label>Description</label><input id="naDesc" autocomplete="off" placeholder="ex. Scellant silicone translucide"></div>
+        <div class="field"><label>Famille</label><select id="naFam"></select></div>
+        <div class="field"><label>Unité de comptage</label><select id="naUnite">
+          <option>pièce</option><option>boîte</option><option>paquet</option><option>paire</option><option>rouleau</option><option>tube</option><option>sac</option><option>feuille</option><option>litre</option><option>gallon</option><option>mètre</option><option>pied</option><option>kg</option><option>longueur</option>
+        </select></div>
+        <div class="field"><label>Quantité comptée sur l'étagère (facultatif)</label><input id="naQte" type="number" inputmode="decimal" min="0" step="any" placeholder="ex. 48"></div>
+      </div>
+      <div id="naSimilaires" style="margin-top:12px"></div>
+      <div class="row" style="margin-top:12px"><button class="btn secondary small" id="naAnnuler">Annuler</button><button class="btn grow" id="naCreer">Créer l'article</button></div>
+      <div class="error" id="naError"></div>
+    </div>
     <!-- STOCK -->
     <section id="view-stock">
       <div class="card">
         <div class="row">
           <input id="stockSearch" class="grow" placeholder="Chercher un code ou une description" style="padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+          <button class="btn secondary" id="newArtBtn" data-open-newart="stock">+ Nouvel article</button>
         </div>
         <div class="chips" id="famChips" style="margin-top:10px"></div>
         <div class="row small muted" id="stockSummary" style="margin-top:10px"></div>
@@ -188,7 +206,8 @@
       </div>
 
       <div class="card">
-        <input id="mvtSearch" placeholder="Chercher un profilé (code ou description)" style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+        <input id="mvtSearch" placeholder="Chercher un article (code ou description)" style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
+        <div class="small muted" style="margin-top:8px">Article introuvable ? <button class="btn secondary small" data-open-newart="mvt">+ Nouvel article</button></div>
         <div class="list" id="mvtResults" style="margin-top:10px"></div>
       </div>
 
@@ -292,6 +311,11 @@
         </div>
       </div>
 
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Articles créés par le magasin — à valider</h2></div>
+        <p class="small muted" style="margin:8px 0 0">Corrige au besoin le code, la description, la famille ou l'unité, puis « Valider ». Si l'article existait déjà sous un autre code, « Fusionner » (admin) déplace ses mouvements sur le bon article. Un article est aussi validé automatiquement quand une facture lui correspond.</p>
+        <div style="overflow-x:auto;margin-top:10px"><table class="ftable"><thead><tr><th>Code</th><th>Description</th><th>Famille</th><th>Unité</th><th class="num">Stock</th><th>Créé par</th><th></th></tr></thead><tbody id="aValiderBody"></tbody></table></div>
+      </div>
       <div class="card">
         <div class="row" style="justify-content:space-between"><h2 style="margin:0">Factures enregistrées</h2><button class="btn secondary small" id="fRefresh">Actualiser</button></div>
         <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Date</th><th>Fournisseur</th><th>N°</th><th>Type</th><th>Projet</th><th class="num">Sous-total</th><th>Par</th><th></th></tr></thead><tbody id="fListe"></tbody></table></div>
@@ -426,7 +450,7 @@
     diag('');
     var r1 = await sb.from('familles').select('*').order('ordre');
     var r2 = await sb.from('couleurs').select('*').order('ordre').order('nom');
-    var r3 = await sb.from('produits').select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note,suivi_couleur,cout_unitaire').eq('actif', true).order('code');
+    var r3 = await sb.from('produits').select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note,suivi_couleur,cout_unitaire,fournisseur_code,a_valider,cree_par').eq('actif', true).order('code');
     var r4 = await sb.from('projets').select('*').order('nom');
     var err = r1.error || r2.error || r3.error || r4.error;
     if (err || !r3.data || !r3.data.length) {
@@ -515,7 +539,7 @@
         ? '<div class="n" style="font-size:16px;color:var(--warn)">à compter</div><div class="u">' + (p.cout_unitaire != null ? 'coût ' + Number(p.cout_unitaire).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' }) + ' / ' + esc(p.unite) : esc(p.unite)) + '</div>'
         : '<div class="n">' + fmt(t) + '</div><div class="u">' + unitLabel(p, t) + (kg ? ' · ' + fmt(Math.round(kg)) + ' kg' : '') + '</div>';
       return '<button class="item" data-id="' + p.id + '">' + thumbHtml(p) +
-        '<div class="main"><div class="code">' + esc(p.code) + '</div><div class="desc">' + esc(p.description) + '</div><div class="colors">' + cols + '</div></div>' +
+        '<div class="main"><div class="code">' + esc(p.code) + (p.a_valider ? ' <span class="tag ajustement" title="Créé par le magasin, en attente de validation par le bureau">à valider</span>' : '') + '</div><div class="desc">' + esc(p.description) + '</div><div class="colors">' + cols + '</div></div>' +
         '<div class="qty">' + qtyHtml + '</div></button>';
     }).join('');
     $('stockList').innerHTML = html || '<div class="muted">Aucun produit.</div>';
@@ -1069,6 +1093,12 @@
       if (lignesRows.length) { var lr = await sb.from('facture_lignes').insert(lignesRows); if (lr.error) throw new Error('Lignes : ' + lr.error.message); }
       if (mvts.length) { var mr = await sb.from('mouvements').insert(mvts); if (mr.error) throw new Error('Mouvements : ' + mr.error.message); }
       for (var c = 0; c < coutMaj.length; c++) { await sb.from('produits').update({ cout_unitaire: coutMaj[c].cout }).eq('id', coutMaj[c].id); }
+      // un article créé par le magasin est validé quand une facture lui correspond
+      for (var v = 0; v < actives.length; v++) {
+        var av = actives[v]; if (!av.produit || !av.produit.a_valider) continue;
+        var maj = { a_valider: false, fournisseur: fournisseur }; if (!av.produit.fournisseur_code && av.src.code) maj.fournisseur_code = av.src.code;
+        await sb.from('produits').update(maj).eq('id', av.produit.id); av.produit.a_valider = false;
+      }
       await loadStock();
       toast('Facture ' + fournisseur + ' n° ' + numero + ' enregistrée : ' + (avantDepart ? 'catalogue et coûts mis à jour, aucune quantité (antérieure au décompte du ' + DATE_DEPART + ')' : mvts.length + ' entrée' + (mvts.length > 1 ? 's' : '') + ' en stock') + ' ✓', 5000);
       F = { lecture: null, lignes: [] }; $('factCard').classList.add('hidden');
@@ -1079,7 +1109,116 @@
     $('fValider').disabled = false; $('fValider').textContent = 'Enregistrer la facture';
   });
 
+  // ---------- Nouvel article (créé par le magasin, à valider) ----------
+  var NA = { retour: 'stock' };
+  function famDe(id) { return state.familles.filter(function (f) { return f.id === id; })[0]; }
+  function estProfile(famId) { var f = famDe(famId); return !!f && (f.code === 'CS' || f.code === 'ISO'); }
+  function motsCles(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4; }); }
+  function similaires(code, desc) {
+    var k = codeKey(code), mots = motsCles(desc);
+    if (!k && !mots.length) return [];
+    return state.produits.map(function (p) {
+      var s = 0, pk = codeKey(p.code);
+      if (k && k.length >= 3) { if (pk === k) s += 100; else if (pk.indexOf(k) >= 0 || k.indexOf(pk) >= 0) s += 40; if (p.fournisseur_code && codeKey(p.fournisseur_code).indexOf(k) >= 0) s += 30; }
+      if (mots.length) { var pm = motsCles(p.description + ' ' + p.code); mots.forEach(function (w) { if (pm.some(function (x) { return x.indexOf(w) === 0 || w.indexOf(x) === 0; })) s += 15; }); }
+      return { p: p, s: s };
+    }).filter(function (x) { return x.s >= 15; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 6);
+  }
+  function renderSimilaires() {
+    var l = similaires($('naCode').value, $('naDesc').value);
+    $('naSimilaires').innerHTML = !l.length ? '' : '<div class="notice warn" style="margin:0 0 8px">Ces articles existent déjà et ressemblent à ce que tu tapes. Si c\'est le même, touche « C\'est celui-ci » au lieu de créer un doublon.</div>' +
+      '<div class="list">' + l.map(function (x) { var p = x.p; return '<div class="item">' + thumbHtml(p) + '<div class="main"><div class="code">' + esc(p.code) + (x.s >= 100 ? ' <span class="tag sortie">même code</span>' : '') + '</div><div class="desc">' + esc(p.description || '') + ' · ' + esc(p.unite) + '</div></div><button class="btn secondary small" data-choisir="' + p.id + '">C\'est celui-ci</button></div>'; }).join('') + '</div>';
+  }
+  function ouvrirNouvelArticle(depuis) {
+    NA.retour = depuis || 'stock';
+    var q = (depuis === 'mvt' ? $('mvtSearch').value : $('stockSearch').value).trim();
+    $('naCode').value = /\d/.test(q) ? q : ''; $('naDesc').value = /\d/.test(q) ? '' : q; $('naQte').value = ''; $('naError').textContent = '';
+    var defFam = state.familles.filter(function (f) { return f.code === 'QUINC'; })[0];
+    $('naFam').innerHTML = famOptions(state.fam && typeof state.fam === 'number' ? state.fam : (defFam ? defFam.id : null));
+    $('naUnite').value = estProfile(Number($('naFam').value)) ? 'longueur' : 'pièce';
+    $('newArtCard').classList.remove('hidden'); renderSimilaires(); window.scrollTo(0, 0); $(($('naCode').value ? 'naDesc' : 'naCode')).focus();
+  }
+  document.addEventListener('click', function (e) { var b = e.target.closest('[data-open-newart]'); if (b) ouvrirNouvelArticle(b.dataset.openNewart); });
+  $('naCode').addEventListener('input', renderSimilaires);
+  $('naDesc').addEventListener('input', renderSimilaires);
+  $('naFam').addEventListener('change', function () { if (estProfile(Number($('naFam').value))) $('naUnite').value = 'longueur'; else if ($('naUnite').value === 'longueur') $('naUnite').value = 'pièce'; });
+  $('naAnnuler').addEventListener('click', function () { $('newArtCard').classList.add('hidden'); });
+  $('naSimilaires').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-choisir]'); if (!b) return;
+    $('newArtCard').classList.add('hidden');
+    showView(NA.retour === 'mvt' ? state.view : 'ajust'); selectProduit(b.dataset.choisir);
+    toast('Article existant choisi : entre la quantité', 3000);
+  });
+  $('naCreer').addEventListener('click', async function () {
+    var code = $('naCode').value.trim(), desc = $('naDesc').value.trim(), famId = Number($('naFam').value), unite = $('naUnite').value;
+    var qTxt = $('naQte').value.trim(), q = qTxt === '' ? null : Number(qTxt);
+    $('naError').textContent = '';
+    if (!code) { $('naError').textContent = 'Le code est obligatoire (celui sur la boîte ou l\'étiquette). S\'il n\'y en a pas, invente un code court, ex. MOUSSE-750.'; $('naCode').focus(); return; }
+    if (!desc) { $('naError').textContent = 'Ajoute une courte description.'; $('naDesc').focus(); return; }
+    if (q !== null && (isNaN(q) || q < 0)) { $('naError').textContent = 'Quantité invalide.'; return; }
+    var meme = state.produits.filter(function (p) { return codeKey(p.code) === codeKey(code); })[0];
+    if (meme) { $('naError').textContent = 'Le code ' + meme.code + ' existe déjà (' + (meme.description || '') + '). Touche « C\'est celui-ci » dans la liste ci-dessus.'; renderSimilaires(); return; }
+    var profile = estProfile(famId);
+    $('naCreer').disabled = true;
+    try {
+      var r = await sb.from('produits').insert({ famille_id: famId, code: code, description: desc, unite: profile ? 'longueur' : unite, suivi_couleur: profile, longueur_m: profile ? 5.486 : null, a_valider: true, cree_par: state.nom, note: 'Créé par ' + state.nom + ' le ' + today() }).select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note,suivi_couleur,cout_unitaire,fournisseur_code,a_valider,cree_par').single();
+      if (r.error) throw new Error(r.error.code === '23505' ? 'ce code existe déjà' : r.error.message);
+      state.produits.push(r.data); state.produits.sort(function (a, b) { return a.code.localeCompare(b.code); });
+      if (q !== null) {
+        var nonPrec = state.couleurs.filter(function (c) { return c.nom === 'Non précisée'; })[0];
+        var m = await sb.from('mouvements').insert({ type: 'ajustement', produit_id: r.data.id, couleur_id: profile && nonPrec ? nonPrec.id : null, quantite: q, quantite_comptee: q, proprietaire_id: propCourant().id, utilisateur: state.nom, note: 'Comptage à la création de l\'article' });
+        if (m.error) throw new Error('article créé, mais comptage non enregistré : ' + m.error.message);
+      }
+      await loadStock();
+      $('newArtCard').classList.add('hidden'); $('stockSearch').value = code;
+      showView('stock');
+      toast('Article ' + code + ' créé' + (q !== null ? ' avec ' + fmt(q) + ' ' + (profile ? 'longueurs' : unite) : '') + ' ✓ (à valider par le bureau)', 4000);
+    } catch (err) { $('naError').textContent = 'Impossible : ' + err.message; }
+    $('naCreer').disabled = false;
+  });
+
+  async function loadAValider() {
+    var r = await sb.from('produits').select('id,code,description,famille_id,unite,suivi_couleur,cree_par,created_at').eq('a_valider', true).eq('actif', true).order('created_at');
+    if (r.error) { $('aValiderBody').innerHTML = '<tr><td colspan="7" class="muted">' + esc(r.error.message) + '</td></tr>'; return; }
+    var autres = state.produits.filter(function (p) { return !p.a_valider; });
+    $('aValiderBody').innerHTML = r.data.map(function (p) {
+      var fus = state.role === 'admin' ? '<div class="row" style="gap:4px;margin-top:4px;flex-wrap:nowrap"><select data-fus-cible="' + p.id + '" style="min-width:150px"><option value="">Fusionner avec…</option>' + autres.filter(function (x) { return x.suivi_couleur === p.suivi_couleur; }).map(function (x) { return '<option value="' + x.id + '">' + esc(x.code) + ' — ' + esc((x.description || '').slice(0, 40)) + '</option>'; }).join('') + '</select><button class="btn danger small" data-fusionner="' + p.id + '">Fusionner</button></div>' : '';
+      return '<tr data-id="' + p.id + '"><td><input data-k="code" value="' + esc(p.code) + '"></td><td><input data-k="description" value="' + esc(p.description || '') + '"></td><td><select data-k="famille_id">' + famOptions(p.famille_id) + '</select></td><td><input data-k="unite" value="' + esc(p.unite) + '" style="width:90px"></td><td class="num">' + fmt(prodQty(p.id)) + '</td><td class="small">' + esc(p.cree_par || '') + '<br><span class="muted">' + new Date(p.created_at).toLocaleDateString('fr-CA') + '</span></td><td><button class="btn small" data-valider="' + p.id + '">Valider</button>' + fus + '</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="muted">Aucun article en attente.</td></tr>';
+  }
+  $('aValiderBody').addEventListener('click', async function (e) {
+    var bv = e.target.closest('button[data-valider]'), bf = e.target.closest('button[data-fusionner]');
+    if (bv) {
+      var tr = bv.closest('tr'); var maj = { a_valider: false };
+      Array.prototype.forEach.call(tr.querySelectorAll('[data-k]'), function (i) { maj[i.dataset.k] = i.dataset.k === 'famille_id' ? Number(i.value) : i.value.trim(); });
+      if (!maj.code) { toast('Le code ne peut pas être vide', 3000); return; }
+      var prof = estProfile(maj.famille_id); maj.suivi_couleur = prof; if (prof) { maj.unite = 'longueur'; maj.longueur_m = 5.486; }
+      bv.disabled = true;
+      var u = await sb.from('produits').update(maj).eq('id', bv.dataset.valider).select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note,suivi_couleur,cout_unitaire,fournisseur_code,a_valider,cree_par').single();
+      if (u.error) { bv.disabled = false; toast('Erreur : ' + (u.error.code === '23505' ? 'ce code existe déjà' : u.error.message), 4000); return; }
+      state.produits = state.produits.map(function (p) { return p.id === u.data.id ? u.data : p; });
+      toast('Article ' + u.data.code + ' validé ✓'); loadAValider(); return;
+    }
+    if (bf) {
+      var src = state.produits.filter(function (p) { return p.id === bf.dataset.fusionner; })[0];
+      var cibleId = bf.closest('tr').querySelector('select[data-fus-cible]').value;
+      var cible = state.produits.filter(function (p) { return p.id === cibleId; })[0];
+      if (!src || !cible) { toast('Choisis l\'article existant avec lequel fusionner', 3000); return; }
+      if (!confirm('Fusionner ' + src.code + ' avec ' + cible.code + ' ?\nTous les mouvements de ' + src.code + ' passeront sur ' + cible.code + ', et ' + src.code + ' sera retiré de la liste.')) return;
+      bf.disabled = true;
+      try {
+        var a = await sb.from('mouvements').update({ produit_id: cible.id }).eq('produit_id', src.id); if (a.error) throw new Error(a.error.message);
+        var b = await sb.from('facture_lignes').update({ produit_id: cible.id }).eq('produit_id', src.id); if (b.error) throw new Error(b.error.message);
+        await sb.from('produit_alias').insert({ produit_id: cible.id, fournisseur: 'magasin', alias: src.code });
+        var c = await sb.from('produits').update({ actif: false, a_valider: false, note: 'Fusionné avec ' + cible.code + ' le ' + today() }).eq('id', src.id); if (c.error) throw new Error(c.error.message);
+        state.produits = state.produits.filter(function (p) { return p.id !== src.id; }); state.alias.push({ produit_id: cible.id, fournisseur: 'magasin', alias: src.code });
+        await loadStock(); toast(src.code + ' fusionné avec ' + cible.code + ' ✓', 3500); loadAValider();
+      } catch (err) { bf.disabled = false; toast('Erreur : ' + err.message, 5000); }
+    }
+  });
+
   async function loadFactures() {
+    loadAValider();
     var r = await sb.from('factures').select('id,date_facture,fournisseur,numero,type_document,sous_total,frais_annexes,statut,valide_par,fichier_chemin,projets(nom)').order('date_facture', { ascending: false }).order('created_at', { ascending: false }).limit(100);
     if (r.error) { toast('Erreur : ' + r.error.message, 4000); return; }
     var TYPES = { stock: 'Stock', direct_projet: 'Direct projet', transformation: 'Transformation', service: 'Service', proforma: 'Pro-forma', bon_livraison: 'Bon de livraison', autre: 'Autre' };
