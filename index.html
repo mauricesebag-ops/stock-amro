@@ -214,7 +214,16 @@
       <div class="card hidden" id="prodCard">
         <div class="prod-head">
           <div class="thumb" id="prodThumb"></div>
-          <div><div class="code" id="prodCode"></div><div class="muted" id="prodDesc"></div><div class="small muted" id="prodMeta"></div></div>
+          <div class="grow"><div class="code" id="prodCode"></div><div class="muted" id="prodDesc"></div><div class="small muted" id="prodMeta"></div></div>
+          <button class="btn secondary small" id="prodEditBtn" title="Corriger la description, l'unité ou la famille">Modifier</button>
+        </div>
+        <div id="prodEdit" class="hidden" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+          <div class="grid2">
+            <div class="field"><label>Description</label><input id="peDesc"></div>
+            <div class="field"><label>Unité de comptage</label><input id="peUnite" placeholder="pièce, boîte, rouleau…"></div>
+            <div class="field"><label>Famille</label><select id="peFam"></select></div>
+          </div>
+          <div class="row" style="margin-top:10px"><button class="btn secondary small" id="peAnnuler">Annuler</button><button class="btn small" id="peSave">Enregistrer la correction</button></div>
         </div>
         <div class="lines" id="prodLines"></div>
         <div class="row" style="margin-top:10px">
@@ -258,7 +267,7 @@
           <input id="histoSearch" class="grow" placeholder="Code, projet, note…" style="padding:10px 14px;border:1px solid var(--line);border-radius:10px;min-height:48px">
           <button class="btn secondary small" id="histoRefresh">Actualiser</button>
         </div>
-        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Type</th><th>Produit</th><th>Couleur</th><th class="num">Qté</th><th>Projet</th><th>Propr.</th><th>Qui</th><th>Note</th><th></th></tr></thead><tbody id="histoBody"></tbody></table></div>
+        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Type</th><th>Produit</th><th>Couleur</th><th class="num">Qté</th><th>Projet</th><th id="thPropr">Propr.</th><th>Qui</th><th>Note</th><th></th></tr></thead><tbody id="histoBody"></tbody></table></div>
       </div>
     </section>
 
@@ -436,6 +445,7 @@
     $('login').classList.add('hidden'); $('app').classList.remove('hidden');
     $('navFactures').classList.toggle('hidden', !(state.role === 'admin' || state.role === 'factures'));
     $('navProp').classList.toggle('hidden', !(state.role === 'admin' || state.role === 'factures'));
+    $('thPropr').classList.toggle('hidden', state.role === 'magasin'); // la vente d'actifs ne concerne pas le magasin
     await loadAll();
     renderStock();
   }
@@ -582,12 +592,34 @@
     renderProd();
     $('prodCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  // Corriger un article (description, unité, famille) — ouvert à tous ; le code reste celui du fournisseur
+  $('prodEditBtn').addEventListener('click', function () {
+    var p = state.prod; if (!p) return;
+    $('peDesc').value = p.description || ''; $('peUnite').value = p.unite || ''; $('peFam').innerHTML = famOptions(p.famille_id);
+    $('peUnite').disabled = !!p.suivi_couleur; $('prodEdit').classList.remove('hidden'); $('peDesc').focus();
+  });
+  $('peAnnuler').addEventListener('click', function () { $('prodEdit').classList.add('hidden'); });
+  $('peSave').addEventListener('click', async function () {
+    var p = state.prod; if (!p) return;
+    var maj = { description: $('peDesc').value.trim(), famille_id: Number($('peFam').value) };
+    if (!p.suivi_couleur) maj.unite = $('peUnite').value.trim() || p.unite;
+    if (!maj.description) { toast('La description ne peut pas être vide', 3000); return; }
+    if (estProfile(maj.famille_id) !== !!p.suivi_couleur) { toast('Un profilé reste dans une famille de profilés (et inversement)', 4000); return; }
+    maj.note = ((p.note ? p.note + ' ' : '') + 'Corrigé par ' + state.nom + ' le ' + today() + '.').slice(-900);
+    $('peSave').disabled = true;
+    var u = await sb.from('produits').update(maj).eq('id', p.id).select('id,code,code_lu,description,famille_id,unite,kg_m,longueur_m,dessin_b64,actif,note,suivi_couleur,cout_unitaire,fournisseur_code,a_valider,cree_par').single();
+    $('peSave').disabled = false;
+    if (u.error) { toast('Erreur : ' + u.error.message, 4000); return; }
+    state.produits = state.produits.map(function (x) { return x.id === u.data.id ? u.data : x; }); state.prod = u.data;
+    $('prodEdit').classList.add('hidden'); renderProd(); toast('Article ' + u.data.code + ' corrigé ✓');
+  });
   function renderProd() {
+    $('prodEdit').classList.add('hidden');
     var p = state.prod; if (!p) { $('prodCard').classList.add('hidden'); return; }
     $('prodCard').classList.remove('hidden');
     $('prodThumb').outerHTML = thumbHtml(p).replace('class="thumb', 'id="prodThumb" class="thumb');
     $('prodCode').textContent = p.code; $('prodDesc').textContent = p.description;
-    $('prodMeta').textContent = (p.kg_m ? p.kg_m + ' kg/m · ' : '') + (p.longueur_m ? 'longueur ' + p.longueur_m + ' m' : '') + (p.note ? ' · ' + p.note : '');
+    $('prodMeta').textContent = p.suivi_couleur ? ((p.kg_m ? p.kg_m + ' kg/m · ' : '') + (p.longueur_m ? 'longueur ' + p.longueur_m + ' m' : '') + (p.note ? ' · ' + p.note : '')) : ('unité : ' + p.unite + (p.note ? ' · ' + p.note : ''));
     var m = state.stock[p.id] || {};
     var label = state.mode === 'sortie' ? 'sortie' : state.mode === 'retour' ? 'retour' : 'compté';
     if (!p.suivi_couleur) {
@@ -703,7 +735,7 @@
       var d = new Date(m.date_mvt); var ds = d.toLocaleDateString('fr-CA') + ' ' + d.toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' });
       var del = state.role === 'admin' ? '<button class="btn danger small" data-del="' + m.id + '">✕</button>' : '';
       var q = Number(m.quantite); var qs = (q > 0 ? '+' : '') + fmt(q) + (m.type === 'ajustement' ? ' <span class="muted">(compté ' + fmt(m.quantite_comptee) + ')</span>' : '');
-      return '<tr><td>' + ds + '</td><td><span class="tag ' + esc(m.type) + '">' + esc(m.type) + '</span></td><td>' + esc((m.produits || {}).code) + '</td><td>' + esc((m.couleurs || {}).nom) + '</td><td class="num">' + qs + '</td><td>' + esc((m.projets || {}).nom || '') + '</td><td class="small muted">' + esc(((m.proprietaires || {}).nom || '').replace('M. ', '')) + '</td><td>' + esc(m.utilisateur || '') + '</td><td>' + esc(m.note || '') + '</td><td>' + del + '</td></tr>';
+      return '<tr><td>' + ds + '</td><td><span class="tag ' + esc(m.type) + '">' + esc(m.type) + '</span></td><td>' + esc((m.produits || {}).code) + '</td><td>' + esc((m.couleurs || {}).nom) + '</td><td class="num">' + qs + '</td><td>' + esc((m.projets || {}).nom || '') + '</td>' + (state.role === 'magasin' ? '' : '<td class="small muted">' + esc(((m.proprietaires || {}).nom || '').replace('M. ', '')) + '</td>') + '<td>' + esc(m.utilisateur || '') + '</td><td>' + esc(m.note || '') + '</td><td>' + del + '</td></tr>';
     }).join('') || '<tr><td colspan="10" class="muted">Aucun mouvement.</td></tr>';
   }
   $('histoRefresh').addEventListener('click', loadHisto);
@@ -904,7 +936,22 @@
         fileStatus(id, 'bad', esc(f.name) + ' : ' + esc(msg)); busy = false; runQueue(); return;
       }
       var lecture = r.data.lecture;
-      var dup2 = (lecture.fournisseur && lecture.numero) ? await sb.from('factures').select('id,statut,date_facture').ilike('fournisseur', lecture.fournisseur).eq('numero', lecture.numero).maybeSingle() : { data: null };
+      // reprendre le nom d'un fournisseur déjà connu s'il est semblable (un seul nom par fournisseur dans l'outil)
+      try {
+        var rf = await sb.from('factures').select('fournisseur').limit(1000);
+        var connus = Array.from(new Set((rf.data || []).map(function (x) { return x.fournisseur; }).concat(state.produits.map(function (p) { return p.fournisseur; })).filter(Boolean)));
+        var GENERIQUES = ['quincaillerie', 'aluminium', 'industries', 'industrie', 'canada', 'distribution', 'fasteners', 'hardware', 'metal', 'metaux', 'acier', 'portes', 'fenetres', 'verre', 'vitrage', 'attaches', 'groupe', 'group', 'produits', 'supply', 'supplies', 'entreprises', 'division', 'international'];
+        var mL = motsCles(lecture.fournisseur).filter(function (w) { return GENERIQUES.indexOf(w) < 0; });
+        var conn = mL.length ? connus.filter(function (n) { var mn = motsCles(n); return mL.some(function (w) { return mn.indexOf(w) >= 0; }); })[0] : null;
+        if (conn && conn !== lecture.fournisseur) { lecture.remarques = (lecture.remarques ? lecture.remarques + ' ' : '') + 'Fournisseur lu « ' + lecture.fournisseur + ' », rattaché au fournisseur déjà connu « ' + conn + ' ».'; lecture.fournisseur = conn; }
+      } catch (e3) {}
+      // même numéro chez un fournisseur au nom semblable (ex. « Viscan » et « Les Attaches Viscan Fasteners »)
+      var dup2 = { data: null };
+      if (lecture.fournisseur && lecture.numero) {
+        var rn = await sb.from('factures').select('id,fournisseur,statut,date_facture').eq('numero', String(lecture.numero).trim());
+        var motsF = motsCles(lecture.fournisseur);
+        dup2.data = (rn.data || []).filter(function (x) { var mx = motsCles(x.fournisseur); return motsF.some(function (w) { return mx.indexOf(w) >= 0; }); })[0] || null;
+      }
       fileStatus(id, 'ok', esc(f.name) + ' : lue (' + esc(lecture.fournisseur) + ' n° ' + esc(lecture.numero) + ', ' + (lecture.lignes || []).length + ' lignes, confiance ' + Math.round((lecture.confiance || 0) * 100) + ' %)');
       ouvrirValidation(f, hash, lecture, dup2.data, r.data);
     } catch (e) {
